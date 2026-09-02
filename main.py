@@ -4,7 +4,6 @@ from settings import settings
 from openai import AsyncOpenAI
 from agents import (
     Agent,
-    OpenAIChatCompletionsModel,
     OpenAIResponsesModel,
     Runner,
     function_tool,
@@ -38,19 +37,11 @@ def list_files() -> str:
 def create_model():
     if settings.base_url:
         set_tracing_disabled(True)
-
     client = AsyncOpenAI(
         base_url=settings.base_url,
         api_key=settings.api_key.get_secret_value(),
     )
-
-    if settings.api_mode == "responses":
-        return OpenAIResponsesModel(
-            model=settings.model,
-            openai_client=client,
-        )
-
-    return OpenAIChatCompletionsModel(
+    return OpenAIResponsesModel(
         model=settings.model,
         openai_client=client,
     )

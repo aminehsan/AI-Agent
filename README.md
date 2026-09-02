@@ -9,6 +9,6 @@ python main.py "List files in this project"
 ```
 
 ## OpenAI-compatible API
-Set `API_MODE=responses` when the provider supports the Responses API.
-Use `chat_completions` for providers that only implement Chat Completions.
+The provider must support the Responses API at `/v1/responses`.
 `API_KEY` is required. For a local endpoint without authentication.
+
