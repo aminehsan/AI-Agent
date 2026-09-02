@@ -1,7 +1,7 @@
-import os
 import sys
 from pathlib import Path
-
+from settings import settings
+from openai import AsyncOpenAI
 from agents import (
     Agent,
     OpenAIChatCompletionsModel,
@@ -10,62 +10,49 @@ from agents import (
     function_tool,
     set_tracing_disabled,
 )
-from openai import AsyncOpenAI
 
-
-DEFAULT_MODEL = "gpt-5.6-terra"
 PROJECT_ROOT = Path(__file__).resolve().parent
 IGNORED_DIRECTORIES = {".git", ".idea", ".venv", ".vscode", "__pycache__"}
 
 
 def get_project_files() -> list[str]:
     files = []
-
     for path in PROJECT_ROOT.rglob("*"):
         relative_path = path.relative_to(PROJECT_ROOT)
-
         if not path.is_file():
             continue
         if any(part in IGNORED_DIRECTORIES for part in relative_path.parts):
             continue
         if relative_path.name == ".env":
             continue
-
         files.append(relative_path.as_posix())
-
     return sorted(files)
 
 
 @function_tool
 def list_files() -> str:
-    """List files in the project without reading their contents."""
     files = get_project_files()
     return "\n".join(files[:200]) or "No files found."
 
 
 def create_model():
-    base_url = os.getenv("OPENAI_BASE_URL")
-    api_key = os.getenv("OPENAI_API_KEY")
-    api_mode = os.getenv("OPENAI_API_MODE", "responses").lower()
-    model_name = os.getenv("OPENAI_MODEL", DEFAULT_MODEL)
-
-    if not api_key and not base_url:
-        raise SystemExit("OPENAI_API_KEY is not set.")
-
-    client_options = {"api_key": api_key or "not-needed"}
-    if base_url:
-        client_options["base_url"] = base_url
+    if settings.base_url:
         set_tracing_disabled(True)
 
-    client = AsyncOpenAI(**client_options)
+    client = AsyncOpenAI(
+        base_url=settings.base_url,
+        api_key=settings.api_key.get_secret_value(),
+    )
 
-    if api_mode == "responses":
-        return OpenAIResponsesModel(model=model_name, openai_client=client)
-    if api_mode == "chat_completions":
-        return OpenAIChatCompletionsModel(model=model_name, openai_client=client)
+    if settings.api_mode == "responses":
+        return OpenAIResponsesModel(
+            model=settings.model,
+            openai_client=client,
+        )
 
-    raise SystemExit(
-        "OPENAI_API_MODE must be 'responses' or 'chat_completions'."
+    return OpenAIChatCompletionsModel(
+        model=settings.model,
+        openai_client=client,
     )
 
 

@@ -1,0 +1,19 @@
+from typing import Literal
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    api_key: SecretStr
+    base_url: str | None = None
+    model: str
+    api_mode: Literal["responses", "chat_completions"] = "responses"
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+settings = Settings()
