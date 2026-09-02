@@ -4,9 +4,9 @@ Programming agent built with the OpenAI Agents SDK. It supports OpenAI-compatibl
 ## Run
 Put the settings in `.env`
 ```bash
-python main.py "Write a Python hello world"
-python main.py "List files in this project"
+python main.py
 ```
+prompt: `List files in this project`
 
 ## OpenAI-compatible API
 The provider must support the Responses API at `/v1/responses`.
