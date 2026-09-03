@@ -1,7 +1,8 @@
-from pathlib import Path
-from settings import settings
+import asyncio
 import openai
 import agents
+from pathlib import Path
+from settings import settings
 
 
 def create_model():
@@ -39,8 +40,8 @@ def list_files() -> str:
     return "\n".join(files[:200]) or "No files found."
 
 
-def main() -> None:
-    prompt = input("Task: ").strip()
+async def main() -> None:
+    prompt = (await asyncio.to_thread(input, "Task: ")).strip()
     if not prompt:
         raise SystemExit("Task cannot be empty.")
 
@@ -49,14 +50,14 @@ def main() -> None:
         model=create_model(),
         tools=[list_files],
         instructions=(
-            "Answer programming questions with simple, practical steps.\n"
+            "Answer programming questions with simple, practical steps. "
             "Use list_files when the user asks about the project files."
         ),
     )
 
-    result = agents.Runner.run_sync(agent, prompt)
+    result = await agents.Runner.run(starting_agent=agent, input=prompt)
     print(result.final_output)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
