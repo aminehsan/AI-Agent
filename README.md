@@ -11,4 +11,3 @@ prompt: `List files in this project`
 ## OpenAI-compatible API
 The provider must support the Responses API at `/v1/responses`.
 `API_KEY` is required. For a local endpoint without authentication.
-
