@@ -3,9 +3,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    api_key: SecretStr
-    base_url: str | None = None
-    model: str
+    model_url: str | None = None
+    model_key: SecretStr
+    model_name: str
+    agent_name: str
+    agent_instructions: str
 
     model_config = SettingsConfigDict(
         env_file=".env",
