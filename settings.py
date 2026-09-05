@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     model_name: str
     agent_name: str
     agent_instructions: str
+    session_id: str
+    session_db_path: str
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -5,6 +5,7 @@ from openai.types.responses import (
     ResponseTextDeltaEvent,
 )
 from agent import create_agent
+from session import create_session
 
 
 async def main() -> None:
@@ -12,8 +13,11 @@ async def main() -> None:
     print()
     if not prompt:
         raise SystemExit("Task cannot be empty.")
-    agent = create_agent()
-    result = Runner.run_streamed(starting_agent=agent, input=prompt)
+    result = Runner.run_streamed(
+        starting_agent=create_agent(),
+        input=prompt,
+        session=create_session(),
+    )
     reasoning_started = False
     answer_started = False
     async for event in result.stream_events():
