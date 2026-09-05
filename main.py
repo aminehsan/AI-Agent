@@ -1,21 +1,18 @@
-from asyncio import to_thread, run
+from asyncio import run
 from agents import RawResponsesStreamEvent, Runner
 from openai.types.responses import (
     ResponseReasoningSummaryTextDeltaEvent,
     ResponseTextDeltaEvent,
 )
+from input import get_input
 from agent import create_agent
 from session import create_session
 
 
 async def main() -> None:
-    prompt = (await to_thread(input, "Task: ")).strip()
-    print()
-    if not prompt:
-        raise SystemExit("Task cannot be empty.")
     result = Runner.run_streamed(
         starting_agent=create_agent(),
-        input=prompt,
+        input=await get_input(),
         session=create_session(),
     )
     reasoning_started = False
