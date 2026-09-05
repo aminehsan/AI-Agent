@@ -1,6 +1,6 @@
 from agents import Agent
-from settings import settings
-from model import create_model
+from .settings import settings
+from .model import create_model
 from tools.filesystem import list_files
 
 

@@ -1,6 +1,6 @@
-from openai import AsyncOpenAI
 from agents import OpenAIResponsesModel, set_tracing_disabled
-from settings import settings
+from openai import AsyncOpenAI
+from .settings import settings
 
 
 def create_model() -> OpenAIResponsesModel:

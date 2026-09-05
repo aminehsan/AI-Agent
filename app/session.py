@@ -1,5 +1,5 @@
 from agents import SQLiteSession
-from settings import settings
+from .settings import settings
 
 
 def create_session() -> SQLiteSession:
