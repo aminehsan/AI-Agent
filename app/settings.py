@@ -1,14 +1,14 @@
 from pathlib import Path
-from pydantic import DirectoryPath, SecretStr, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import DirectoryPath, SecretStr, computed_field, field_validator
 
 
 class Settings(BaseSettings):
     model_url: str | None = None
     model_key: SecretStr
     model_name: str
-    agent_name: str
-    agent_instructions: str
+    agent_name: str = "Coding Assistant"
+    agent_instructions: str = "You are a programming assistant."
     session_id: str = "default"
     database_name: str = "conversation.db"
     project_root: DirectoryPath
