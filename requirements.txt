@@ -1,2 +1,3 @@
 pydantic-settings
 openai-agents
+sqlmodel

@@ -1,5 +1,7 @@
 from pathlib import Path
+from collections.abc import Callable
 from agents import function_tool
+from app.plan import plan_store
 from app.settings import settings
 
 IGNORED_DIRECTORIES = {
@@ -70,26 +72,129 @@ def edit_project_file(path: str, old_text: str, new_text: str) -> str:
     return f"Updated: {path}"
 
 
-@function_tool
-def list_files() -> str:
-    """List paths relative to the configured project root without reading files."""
-    files = get_project_files()
-    return "\n".join(files) or "No files found."
+def _execute_planned_tool(
+    *,
+    step_id: int,
+    tool_name: str,
+    action: str,
+    purpose: str,
+    expected_result: str,
+    arguments: dict[str, str],
+    operation: Callable[[], str],
+) -> str:
+    """Run one existing filesystem operation through the active plan gate."""
+    reservation = plan_store.begin_execution(
+        step_id=step_id,
+        tool_name=tool_name,
+        action=action,
+        purpose=purpose,
+        expected_result=expected_result,
+        details={
+            "tool": tool_name,
+            "action": action,
+            "purpose": purpose,
+            "expected_result": expected_result,
+            "arguments": arguments,
+        },
+    )
+
+    try:
+        output = operation()
+    except Exception as exc:
+        plan_store.finish_execution(
+            step_id=step_id,
+            attempt_number=reservation["attempt_number"],
+            execution_id=reservation["execution_id"],
+            result={
+                "ok": False,
+                "exit_code": 1,
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+        )
+        raise
+
+    plan_store.finish_execution(
+        step_id=step_id,
+        attempt_number=reservation["attempt_number"],
+        execution_id=reservation["execution_id"],
+        result={"ok": True, "exit_code": 0, "output": output},
+    )
+    return output
 
 
 @function_tool
-def read_file(path: str) -> str:
-    """Read a UTF-8 text file. The path must be relative to the project root."""
-    return read_project_file(path)
+def list_files(
+    step_id: int,
+    purpose: str,
+    expected_result: str,
+) -> str:
+    """List project paths for the current in-progress plan step."""
+    return _execute_planned_tool(
+        step_id=step_id,
+        tool_name="list_files",
+        action="list",
+        purpose=purpose,
+        expected_result=expected_result,
+        arguments={},
+        operation=lambda: "\n".join(get_project_files()) or "No files found.",
+    )
 
 
 @function_tool
-def write_file(path: str, content: str) -> str:
-    """Create or overwrite a UTF-8 text file relative to the project root."""
-    return write_project_file(path, content)
+def read_file(
+    step_id: int,
+    purpose: str,
+    expected_result: str,
+    path: str,
+) -> str:
+    """Read a UTF-8 file for the current in-progress plan step."""
+    return _execute_planned_tool(
+        step_id=step_id,
+        tool_name="read_file",
+        action="read",
+        purpose=purpose,
+        expected_result=expected_result,
+        arguments={"path": path},
+        operation=lambda: read_project_file(path),
+    )
 
 
 @function_tool
-def edit_file(path: str, old_text: str, new_text: str) -> str:
-    """Replace one exact text occurrence in a UTF-8 file under the project root."""
-    return edit_project_file(path, old_text, new_text)
+def write_file(
+    step_id: int,
+    purpose: str,
+    expected_result: str,
+    path: str,
+    content: str,
+) -> str:
+    """Create or overwrite a UTF-8 file for the current plan step."""
+    return _execute_planned_tool(
+        step_id=step_id,
+        tool_name="write_file",
+        action="write",
+        purpose=purpose,
+        expected_result=expected_result,
+        arguments={"path": path, "content": content},
+        operation=lambda: write_project_file(path, content),
+    )
+
+
+@function_tool
+def edit_file(
+    step_id: int,
+    purpose: str,
+    expected_result: str,
+    path: str,
+    old_text: str,
+    new_text: str,
+) -> str:
+    """Replace one exact text occurrence for the current plan step."""
+    return _execute_planned_tool(
+        step_id=step_id,
+        tool_name="edit_file",
+        action="edit",
+        purpose=purpose,
+        expected_result=expected_result,
+        arguments={"path": path, "old_text": old_text, "new_text": new_text},
+        operation=lambda: edit_project_file(path, old_text, new_text),
+    )
