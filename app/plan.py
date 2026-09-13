@@ -1,432 +1,299 @@
-import errno
-import hashlib
-import json
-import os
-import threading
 import time
-import uuid
-from collections.abc import Iterator
-from contextlib import contextmanager
-from copy import deepcopy
-from datetime import UTC, datetime
+import json
+import hashlib
 from pathlib import Path
-from typing import Any, Literal
+from functools import lru_cache
+from contextlib import contextmanager
+from typing import Any, Iterator, Literal
+from sqlalchemy import event, update
+from sqlalchemy.engine import Engine, URL
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlmodel import Session, SQLModel, create_engine, select
+from .plan_models import (
+    AttemptStatus,
+    ExecutionPlan,
+    PlanAttempt,
+    PlanPointer,
+    PlanRequest,
+    PlanRevision,
+    PlanStatus,
+    PlanStep,
+    RequestInput,
+    StepStatus,
+    utc_now,
+)
 from .project import get_project_state_directory
 from .settings import settings
 
 PlanReviewOutcome = Literal["completed", "retry", "failed", "skipped"]
 _REVIEW_OUTCOMES = frozenset({"completed", "retry", "failed", "skipped"})
-_FINISHED_STEP_STATUSES = frozenset({"completed", "skipped"})
-_REVISION_SKIP_STATUSES = frozenset({"pending", "in_progress", "failed"})
+_LEASE_SECONDS = 20
 
 
 class PlanStateError(RuntimeError):
-    """Raised when plan state or a requested state transition is invalid."""
+    """The requested transition is not valid for the current plan."""
 
 
-def _now() -> str:
-    """Return the current UTC timestamp in ISO 8601 format."""
-    return datetime.now(UTC).isoformat()
-
-
-def _text(value: object, name: str) -> str:
-    """Validate and normalize a required non-empty string."""
+def _required_text(value: object, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise PlanStateError(f"{name} must be a non-empty string.")
     return value.strip()
 
 
-def _optional_text(value: object) -> str | None:
-    """Normalize optional text and collapse blank values to None."""
-    return value.strip() if isinstance(value, str) and value.strip() else None
-
-
-def _positive_int(value: object, name: str) -> int:
-    """Validate that a value is a positive integer."""
-    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+def _positive_number(value: object, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise PlanStateError(f"{name} must be a positive integer.")
     return value
 
 
-@contextmanager
-def _interprocess_lock(target: Path) -> Iterator[None]:
-    """Serialize plan-state transactions across OS processes."""
-    lock_path = target.with_name(f".{target.name}.lock")
-    try:
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        handle = lock_path.open("a+b")
-    except OSError as exc:
-        raise PlanStateError(f"Cannot open plan lock {lock_path}: {exc}") from exc
-    try:
-        if os.name == "nt":
-            import msvcrt
-
-            handle.seek(0, os.SEEK_END)
-            if handle.tell() == 0:
-                handle.write(b"\0")
-                handle.flush()
-            while True:
-                handle.seek(0)
-                try:
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-                    break
-                except OSError as exc:
-                    # Existing Windows locks surface as EACCES/EAGAIN; retry only those.
-                    if exc.errno not in {errno.EACCES, errno.EAGAIN}:
-                        raise
-                    time.sleep(0.05)
-            try:
-                yield
-            finally:
-                handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-        else:
-            import fcntl
-
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-    except OSError as exc:
-        raise PlanStateError(f"Cannot lock plan state {target}: {exc}") from exc
-    finally:
-        handle.close()
-
-
-def _normalize_steps(value: object, *, revised: bool = False) -> list[tuple[str, str]]:
-    """Validate and normalize plan step definitions."""
-    label = "A revised plan" if revised else "A plan"
-    if not isinstance(value, list) or not value:
-        raise PlanStateError(f"{label} must contain at least one step.")
-    normalized = []
-    for index, step in enumerate(value, start=1):
+def _step_definitions(steps: object) -> list[tuple[str, str]]:
+    if not isinstance(steps, list) or not steps:
+        raise PlanStateError("A plan must contain at least one step.")
+    definitions: list[tuple[str, str]] = []
+    for number, step in enumerate(steps, start=1):
         if not isinstance(step, dict):
-            raise PlanStateError(f"Step {index} must be an object.")
-        normalized.append(
+            raise PlanStateError(f"Step {number} must be an object.")
+        definitions.append(
             (
-                _text(step.get("title"), f"step {index}.title"),
-                _text(step.get("expected_result"), f"step {index}.expected_result"),
+                _required_text(step.get("title"), f"step {number}.title"),
+                _required_text(
+                    step.get("expected_result"), f"step {number}.expected_result"
+                ),
             )
         )
-    return normalized
+    return definitions
+
+
+def _json(value: dict[str, Any]) -> str:
+    try:
+        return json.dumps(value, ensure_ascii=False, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise PlanStateError(f"Execution data cannot be stored as JSON: {exc}") from exc
+
+
+@lru_cache(maxsize=64)
+def _engine(path: Path) -> Engine:
+    """Build one engine per session database; old sample databases are untouched."""
+    engine = create_engine(
+        URL.create("sqlite", database=str(path)), connect_args={"timeout": 10}
+    )
+
+    @event.listens_for(engine, "connect")
+    def configure_sqlite(connection: Any, _record: Any) -> None:
+        # SQLAlchemy emits BEGIN below, including for reads. WAL keeps those reads
+        # separate from the short write transactions used by plan transitions.
+        connection.isolation_level = None
+        cursor = connection.cursor()
+        try:
+            cursor.execute("PRAGMA busy_timeout = 10000")
+            cursor.execute("PRAGMA foreign_keys = ON")
+            cursor.execute("PRAGMA journal_mode = WAL")
+        finally:
+            cursor.close()
+
+    @event.listens_for(engine, "begin")
+    def begin_transaction(connection: Any) -> None:
+        connection.exec_driver_sql("BEGIN")
+
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session, session.begin():
+        session.exec(
+            sqlite_insert(PlanPointer)
+            .values(id=1, version=0)
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
+    return engine
 
 
 class PlanStore:
-    """Persistent state machine for the current session's execution plan."""
-
-    # Shared by every PlanStore instance in this interpreter. The file lock below
-    # provides the corresponding cross-process protection.
-    _lock = threading.RLock()
+    """Enforce one ordered, reviewable execution plan per SESSION_ID."""
 
     def __init__(self, *, session_id: str | None = None) -> None:
-        """Create a plan store optionally bound to a specific session ID."""
         self._session_id = session_id
 
     @property
     def path(self) -> Path:
-        """Return the persisted state path for the current session."""
-        session_id = _text(
-            self._session_id or getattr(settings, "session_id", None),
-            "session_id",
+        session_id = _required_text(
+            self._session_id or settings.session_id, "session_id"
         )
-        # Preserve the original 16-hex filename for persisted-state compatibility.
-        session_key = hashlib.sha256(session_id.encode()).hexdigest()[:16]
-        return Path(get_project_state_directory()) / f"plan-{session_key}.json"
+        key = hashlib.sha256(session_id.encode()).hexdigest()[:16]
+        return get_project_state_directory() / f"plan-sqlmodel-{key}.db"
 
     @contextmanager
-    def _state_lock(self) -> Iterator[None]:
-        """Lock state access across both threads and processes."""
-        with self._lock, _interprocess_lock(self.path):
-            yield
+    def _session(self, *, write: bool = False) -> Iterator[Session]:
+        try:
+            with Session(_engine(self.path), expire_on_commit=False) as session:
+                with session.begin():
+                    if write:
+                        # The first statement acquires SQLite's writer reservation.
+                        # Read/check/update transitions then stay atomic across processes.
+                        session.exec(
+                            update(PlanPointer)
+                            .where(PlanPointer.id == 1)
+                            .values(version=PlanPointer.version + 1)
+                        )
+                    yield session
+        except SQLAlchemyError as exc:
+            raise PlanStateError(
+                f"Cannot access plan database {self.path}: {exc}"
+            ) from exc
 
     @staticmethod
-    def _empty_state() -> dict[str, Any]:
-        """Return a new empty version-1 plan state."""
-        return {
-            "version": 1,
-            "active_plan": None,
-            "history": [],
-            "current_request": None,
-        }
+    def _pointer(session: Session) -> PlanPointer:
+        pointer = session.get(PlanPointer, 1)
+        if pointer is None:
+            raise PlanStateError("Plan database has no session pointer.")
+        return pointer
 
-    def _load(self) -> dict[str, Any]:
-        """Load and minimally normalize persisted plan state."""
-        path = self.path
-        if not path.exists():
-            return self._empty_state()
-        try:
-            state = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            raise PlanStateError(f"Cannot read plan state from {path}: {exc}") from exc
-        if not isinstance(state, dict):
-            raise PlanStateError("Plan state must be a JSON object.")
-        # Keep version-1 files readable when optional top-level keys are missing.
-        state.setdefault("version", 1)
-        state.setdefault("active_plan", None)
-        state.setdefault("history", [])
-        state.setdefault("current_request", None)
-        if not isinstance(state["history"], list):
-            raise PlanStateError("Plan history must be a list.")
-        return state
-
-    def _save(self, state: dict[str, Any]) -> None:
-        """Atomically persist plan state to disk."""
-        path = self.path
-        temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            temporary.write_text(
-                json.dumps(state, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
-                encoding="utf-8",
-            )
-            os.replace(temporary, path)
-        except (OSError, TypeError, ValueError, UnicodeError) as exc:
-            raise PlanStateError(f"Cannot save plan state to {path}: {exc}") from exc
-        finally:
-            try:
-                temporary.unlink(missing_ok=True)
-            except OSError:
-                pass
-
-    @staticmethod
-    def _active_plan(state: dict[str, Any]) -> dict[str, Any]:
-        """Return the active plan after validating its request link."""
-        plan = state.get("active_plan")
-        if not isinstance(plan, dict) or plan.get("status") != "active":
+    @classmethod
+    def _active_plan(cls, session: Session) -> ExecutionPlan:
+        pointer = cls._pointer(session)
+        plan = session.get(ExecutionPlan, pointer.plan_id) if pointer.plan_id else None
+        if plan is None or plan.status != PlanStatus.active:
             raise PlanStateError("There is no active plan. Create a plan first.")
-        request = state.get("current_request")
-        if not isinstance(request, dict) or request.get("plan_id") != plan.get("id"):
-            raise PlanStateError("The active request is not connected to this plan.")
         return plan
 
     @staticmethod
-    def _find_step(plan: dict[str, Any], step_id: int) -> dict[str, Any]:
-        """Return a plan step by ID or raise when it does not exist."""
-        for step in plan.get("steps", []):
-            if isinstance(step, dict) and step.get("id") == step_id:
-                return step
-        raise PlanStateError(f"Plan step {step_id} does not exist.")
+    def _step(session: Session, plan: ExecutionPlan, number: int) -> PlanStep:
+        step = session.exec(
+            select(PlanStep).where(
+                PlanStep.plan_id == plan.id, PlanStep.number == number
+            )
+        ).one_or_none()
+        if step is None:
+            raise PlanStateError(f"Plan step {number} does not exist.")
+        return step
 
     @staticmethod
-    def _new_step(step_id: int, title: str, expected_result: str) -> dict[str, Any]:
-        """Build a new pending plan step."""
-        return {
-            "id": step_id,
-            "title": title,
-            "expected_result": expected_result,
-            "status": "pending",
-            "attempts": [],
-            "result_summary": None,
-            "evidence": None,
-        }
+    def _steps(session: Session, plan: ExecutionPlan) -> list[PlanStep]:
+        return list(
+            session.exec(
+                select(PlanStep)
+                .where(PlanStep.plan_id == plan.id)
+                .order_by(PlanStep.number)
+            )
+        )
 
     @staticmethod
-    def _latest_attempt(step: dict[str, Any]) -> dict[str, Any] | None:
-        """Return the latest valid execution attempt for a step."""
-        attempts = step.get("attempts")
-        if not isinstance(attempts, list) or not attempts:
-            return None
-        latest = attempts[-1]
-        return latest if isinstance(latest, dict) else None
-
-    @classmethod
-    def _compact_step(cls, step: dict[str, Any]) -> dict[str, Any]:
-        """Build the compact step representation used in prompt snapshots."""
-        latest = cls._latest_attempt(step)
-        result = latest.get("result") if latest else None
-        return {
-            "id": step["id"],
-            "title": step["title"],
-            "expected_result": step["expected_result"],
-            "status": step["status"],
-            "attempt_count": len(step.get("attempts", [])),
-            "latest_exit_code": (
-                result.get("exit_code") if isinstance(result, dict) else None
-            ),
-            "result_summary": step.get("result_summary"),
-        }
+    def _latest_attempt(session: Session, step: PlanStep) -> PlanAttempt | None:
+        return session.exec(
+            select(PlanAttempt)
+            .where(PlanAttempt.step_id == step.id)
+            .order_by(PlanAttempt.number.desc())
+            .limit(1)
+        ).first()
 
     def begin_request(self, user_input: str) -> dict[str, Any]:
-        """Start a new user request and recover interrupted execution state."""
-        user_input = _text(user_input, "user_input")
-        with self._state_lock():
-            state = self._load()
-            active = state.get("active_plan")
-            if isinstance(active, dict) and active.get("status") == "completed":
-                state["history"].append(active)
-                state["active_plan"] = None
-                active = None
-            elif isinstance(active, dict) and active.get("status") == "active":
-                current_id = active.get("current_step_id")
-                if isinstance(current_id, int):
-                    current = self._find_step(active, current_id)
-                    latest = self._latest_attempt(current)
-                    if latest and latest.get("status") == "running":
-                        timestamp = _now()
-                        latest.update(
-                            status="failed",
-                            finished_at=timestamp,
-                            result={
-                                "ok": False,
-                                "exit_code": None,
-                                "launch_error": (
-                                    "The application stopped before this command "
-                                    "returned a result."
-                                ),
-                                "finished_at": timestamp,
-                            },
+        """Resume unfinished work, or open a fresh request after a terminal plan."""
+        user_input = _required_text(user_input, "user_input")
+        with self._session(write=True) as session:
+            pointer = self._pointer(session)
+            plan = (
+                session.get(ExecutionPlan, pointer.plan_id) if pointer.plan_id else None
+            )
+            request = (
+                session.get(PlanRequest, pointer.request_id)
+                if pointer.request_id
+                else None
+            )
+            continuing = request is not None and request.status == PlanStatus.active
+
+            if continuing and plan is not None and plan.current_step_number is not None:
+                step = self._step(session, plan, plan.current_step_number)
+                attempt = self._latest_attempt(session, step)
+                if attempt is not None and attempt.status == AttemptStatus.running:
+                    if (attempt.lease_until or 0) > time.time():
+                        raise PlanStateError(
+                            "This session has a live command. Wait for it to finish."
                         )
-                        current["status"] = "awaiting_review"
-                        active["updated_at"] = timestamp
-            state["current_request"] = {
-                "id": uuid.uuid4().hex,
-                "input": user_input,
-                "started_at": _now(),
-                "plan_id": active.get("id") if isinstance(active, dict) else None,
-            }
-            self._save(state)
-            return deepcopy(state)
+                    attempt.status = AttemptStatus.interrupted
+                    attempt.finished_at = utc_now()
+                    attempt.lease_until = None
+                    attempt.result_json = _json(
+                        {
+                            "ok": False,
+                            "exit_code": None,
+                            "launch_error": "The previous execution stopped before returning a result.",
+                            "finished_at": attempt.finished_at,
+                        }
+                    )
+                    step.status = StepStatus.awaiting_review
+                    plan.updated_at = attempt.finished_at
+
+            if not continuing:
+                request = PlanRequest(input=user_input)
+                session.add(request)
+                pointer.request_id = request.id
+                pointer.plan_id = None
+
+            session.add(RequestInput(request_id=request.id, input=user_input))
+        return self.snapshot()
 
     def create_plan(self, goal: str, steps: list[dict[str, str]]) -> dict[str, Any]:
-        """Create a new active plan for the current request."""
-        goal = _text(goal, "goal")
-        normalized_steps = _normalize_steps(steps)
-        with self._state_lock():
-            state = self._load()
-            request = state.get("current_request")
-            if not isinstance(request, dict):
+        goal = _required_text(goal, "goal")
+        definitions = _step_definitions(steps)
+        with self._session(write=True) as session:
+            pointer = self._pointer(session)
+            request = (
+                session.get(PlanRequest, pointer.request_id)
+                if pointer.request_id
+                else None
+            )
+            if request is None or request.status != PlanStatus.active:
                 raise PlanStateError("No active user request exists.")
-            active = state.get("active_plan")
-            if active is not None:
-                if not isinstance(active, dict):
-                    raise PlanStateError("Active plan state is invalid.")
-                if active.get("status") == "active":
-                    raise PlanStateError(
-                        "An unfinished plan already exists. Revise it instead."
-                    )
-                if active.get("status") == "completed":
-                    raise PlanStateError(
-                        "The previous plan is completed. Begin a new request before "
-                        "creating another plan."
-                    )
-                raise PlanStateError(
-                    f"Existing plan has invalid status: {active.get('status')!r}."
+            if pointer.plan_id is not None:
+                raise PlanStateError("A plan already exists. Revise it instead.")
+
+            plan = ExecutionPlan(request_id=request.id, goal=goal)
+            session.add(plan)
+            session.add_all(
+                PlanStep(
+                    plan_id=plan.id,
+                    number=number,
+                    title=title,
+                    expected_result=expected,
                 )
-            plan_id = uuid.uuid4().hex
-            timestamp = _now()
-            state["active_plan"] = {
-                "id": plan_id,
-                "goal": goal,
-                "status": "active",
-                "revision": 1,
-                "created_at": timestamp,
-                "updated_at": timestamp,
-                "current_step_id": None,
-                "steps": [
-                    self._new_step(index, title, expected_result)
-                    for index, (title, expected_result) in enumerate(
-                        normalized_steps, start=1
-                    )
-                ],
-                "final_summary": None,
-            }
-            request["plan_id"] = plan_id
-            self._save(state)
-            return deepcopy(state)
+                for number, (title, expected) in enumerate(definitions, start=1)
+            )
+            session.add(
+                PlanRevision(
+                    plan_id=plan.id, number=1, reason="Initial plan", goal=goal
+                )
+            )
+            pointer.plan_id = plan.id
+        return self.compact_snapshot()
 
     def start_step(self, step_id: int) -> dict[str, Any]:
-        """Start the next pending step in plan order."""
-        step_id = _positive_int(step_id, "step_id")
-        with self._state_lock():
-            state = self._load()
-            plan = self._active_plan(state)
-            current_id = plan.get("current_step_id")
-            if current_id is not None:
+        step_id = _positive_number(step_id, "step_id")
+        with self._session(write=True) as session:
+            plan = self._active_plan(session)
+            if plan.current_step_number is not None:
                 raise PlanStateError(
-                    f"Step {current_id} is already current and must be resolved first."
+                    f"Step {plan.current_step_number} is already current and must be resolved first."
                 )
-            failed_steps = [
-                step["id"] for step in plan["steps"] if step.get("status") == "failed"
-            ]
-            if failed_steps:
+            steps = self._steps(session, plan)
+            if any(step.status == StepStatus.failed for step in steps):
                 raise PlanStateError(
-                    f"Failed steps {failed_steps} must be resolved by revising "
-                    "the plan."
+                    "Failed steps must be resolved by revising the plan."
                 )
-            step = self._find_step(plan, step_id)
-            if step.get("status") != "pending":
+            step = self._step(session, plan, step_id)
+            if step.status != StepStatus.pending:
                 raise PlanStateError(
-                    f"Step {step_id} cannot start from status {step.get('status')}."
+                    f"Step {step_id} cannot start from status {step.status}."
                 )
             next_pending = next(
-                (
-                    candidate
-                    for candidate in plan["steps"]
-                    if candidate.get("status") == "pending"
-                ),
-                None,
+                (item for item in steps if item.status == StepStatus.pending), None
             )
-            if next_pending is None:
-                raise PlanStateError("There is no pending step.")
-            if next_pending["id"] != step_id:
+            if next_pending is None or next_pending.number != step_id:
                 raise PlanStateError(
-                    f"Step {step_id} is out of order. Start step "
-                    f"{next_pending['id']} next."
+                    f"Step {step_id} is out of order. Start step {next_pending.number if next_pending else 'none'} next."
                 )
-            timestamp = _now()
-            step["status"] = "in_progress"
-            step["started_at"] = timestamp
-            plan["current_step_id"] = step_id
-            plan["updated_at"] = timestamp
-            self._save(state)
-            return deepcopy(state)
-
-    def revise_plan(
-        self,
-        reason: str,
-        steps: list[dict[str, str]],
-        goal: str | None = None,
-    ) -> dict[str, Any]:
-        """Supersede unfinished steps and append a revised plan."""
-        reason = _text(reason, "reason")
-        normalized_steps = _normalize_steps(steps, revised=True)
-        goal = None if goal is None else _text(goal, "goal")
-        with self._state_lock():
-            state = self._load()
-            plan = self._active_plan(state)
-            current_id = plan.get("current_step_id")
-            if isinstance(current_id, int):
-                current = self._find_step(plan, current_id)
-                if current.get("status") == "awaiting_review":
-                    raise PlanStateError(
-                        "Review the latest command result before revising the plan."
-                    )
-                latest = self._latest_attempt(current)
-                if latest and latest.get("status") == "running":
-                    raise PlanStateError(
-                        "Finish the running command before revising the plan."
-                    )
-            timestamp = _now()
-            for step in plan["steps"]:
-                if step.get("status") not in _REVISION_SKIP_STATUSES:
-                    continue
-                step["status"] = "skipped"
-                step["result_summary"] = f"Superseded by revision: {reason}"
-                step["completed_at"] = timestamp
-            next_id = max((step["id"] for step in plan["steps"]), default=0) + 1
-            plan["steps"].extend(
-                self._new_step(next_id + offset, title, expected_result)
-                for offset, (title, expected_result) in enumerate(normalized_steps)
-            )
-            if goal is not None:
-                plan["goal"] = goal
-            plan["revision"] += 1
-            plan["revision_reason"] = reason
-            plan["current_step_id"] = None
-            plan["updated_at"] = timestamp
-            self._save(state)
-            return deepcopy(state)
+            step.status = StepStatus.in_progress
+            step.started_at = utc_now()
+            plan.current_step_number = step_id
+            plan.updated_at = step.started_at
+        return self.compact_snapshot()
 
     def begin_execution(
         self,
@@ -437,98 +304,107 @@ class PlanStore:
         expected_result: str,
         details: dict[str, Any],
     ) -> dict[str, Any]:
-        """Record a new running execution attempt for the current step."""
-        step_id = _positive_int(step_id, "step_id")
-        tool_name = _text(tool_name, "tool_name")
-        action = _text(action, "action")
-        purpose = _text(purpose, "purpose")
-        expected_result = _text(expected_result, "expected_result")
+        step_id = _positive_number(step_id, "step_id")
+        tool_name = _required_text(tool_name, "tool_name")
+        action = _required_text(action, "action")
+        purpose = _required_text(purpose, "purpose")
+        expected_result = _required_text(expected_result, "expected_result")
         if not isinstance(details, dict):
             raise PlanStateError("details must be an object.")
-        with self._state_lock():
-            state = self._load()
-            plan = self._active_plan(state)
-            if plan.get("current_step_id") != step_id:
+        request_json = _json(details)
+
+        with self._session(write=True) as session:
+            plan = self._active_plan(session)
+            if plan.current_step_number != step_id:
                 raise PlanStateError(
-                    f"Step {step_id} is not current. Current step: "
-                    f"{plan.get('current_step_id')}."
+                    f"Step {step_id} is not current. Current step: {plan.current_step_number}."
                 )
-            step = self._find_step(plan, step_id)
-            if step.get("status") != "in_progress":
+            step = self._step(session, plan, step_id)
+            if step.status != StepStatus.in_progress:
                 raise PlanStateError(
-                    f"Step {step_id} is {step.get('status')}; it must be in_progress."
+                    f"Step {step_id} is {step.status}; it must be in_progress."
                 )
-            latest = self._latest_attempt(step)
-            if latest and latest.get("status") == "running":
+            latest = self._latest_attempt(session, step)
+            if latest is not None and latest.status == AttemptStatus.running:
                 raise PlanStateError(
                     f"Step {step_id} already has a running command attempt."
                 )
-            attempts = step.get("attempts")
-            if not isinstance(attempts, list):
-                raise PlanStateError(f"Step {step_id} attempts are invalid.")
-            attempt = {
-                "number": len(attempts) + 1,
-                "tool": tool_name,
-                "action": action,
-                "purpose": purpose,
-                "expected_result": expected_result,
-                "status": "running",
-                "started_at": _now(),
-                "request": deepcopy(details),
-                "result": None,
-            }
-            attempts.append(attempt)
-            plan["updated_at"] = _now()
-            self._save(state)
-            return {
-                "plan_id": plan["id"],
+
+            step.attempt_count += 1
+            attempt = PlanAttempt(
+                step_id=step.id,
+                number=step.attempt_count,
+                tool=tool_name,
+                action=action,
+                purpose=purpose,
+                expected_result=expected_result,
+                request_json=request_json,
+                lease_until=time.time() + _LEASE_SECONDS,
+            )
+            session.add(attempt)
+            plan.updated_at = utc_now()
+            reservation = {
+                "plan_id": plan.id,
                 "step_id": step_id,
-                "attempt_number": attempt["number"],
+                "attempt_number": attempt.number,
+                "execution_id": attempt.id,
             }
+        return reservation
+
+    def touch_execution(self, execution_id: str) -> None:
+        execution_id = _required_text(execution_id, "execution_id")
+        with self._session(write=True) as session:
+            attempt = session.get(PlanAttempt, execution_id)
+            if attempt is None or attempt.status != AttemptStatus.running:
+                raise PlanStateError("The execution is no longer running.")
+            attempt.lease_until = time.time() + _LEASE_SECONDS
 
     def finish_execution(
         self,
         step_id: int,
         attempt_number: int,
         result: dict[str, Any],
+        execution_id: str,
     ) -> dict[str, Any]:
-        """Finish the latest execution attempt and queue it for review."""
-        step_id = _positive_int(step_id, "step_id")
-        attempt_number = _positive_int(attempt_number, "attempt_number")
+        step_id = _positive_number(step_id, "step_id")
+        attempt_number = _positive_number(attempt_number, "attempt_number")
+        execution_id = _required_text(execution_id, "execution_id")
         if not isinstance(result, dict):
             raise PlanStateError("result must be an object.")
-        with self._state_lock():
-            state = self._load()
-            plan = self._active_plan(state)
-            if plan.get("current_step_id") != step_id:
+        result_json = _json(result)
+
+        with self._session(write=True) as session:
+            plan = self._active_plan(session)
+            if plan.current_step_number != step_id:
                 raise PlanStateError(f"Step {step_id} is not the current step.")
-            step = self._find_step(plan, step_id)
-            if step.get("status") != "in_progress":
+            step = self._step(session, plan, step_id)
+            attempt = self._latest_attempt(session, step)
+            if (
+                step.status != StepStatus.in_progress
+                or attempt is None
+                or attempt.status != AttemptStatus.running
+            ):
                 raise PlanStateError(f"Step {step_id} has no running execution.")
-            attempts = step.get("attempts")
-            if not isinstance(attempts, list) or attempt_number > len(attempts):
-                raise PlanStateError(
-                    f"Attempt {attempt_number} does not exist for step {step_id}."
-                )
-            if attempt_number != len(attempts):
+            if attempt.number != attempt_number:
                 raise PlanStateError(
                     f"Attempt {attempt_number} is stale for step {step_id}."
                 )
-            attempt = attempts[attempt_number - 1]
-            if not isinstance(attempt, dict) or attempt.get("status") != "running":
-                raise PlanStateError(
-                    f"Attempt {attempt_number} for step {step_id} is not running."
-                )
-            timestamp = _now()
-            attempt["status"] = (
-                "succeeded" if result.get("exit_code") == 0 else "failed"
+            if attempt.id != execution_id:
+                raise PlanStateError("The execution ID does not own this attempt.")
+
+            timestamp = utc_now()
+            attempt.status = (
+                AttemptStatus.succeeded
+                if result.get("exit_code") == 0 and result.get("launch_error") is None
+                else AttemptStatus.failed
             )
-            attempt["finished_at"] = timestamp
-            attempt["result"] = deepcopy(result)
-            step["status"] = "awaiting_review"
-            plan["updated_at"] = timestamp
-            self._save(state)
-            return deepcopy(state)
+            attempt.result_json = result_json
+            attempt.finished_at = timestamp
+            attempt.lease_until = None
+            step.status = StepStatus.awaiting_review
+            step.latest_exit_code = result.get("exit_code")
+            plan.updated_at = timestamp
+        return self.compact_snapshot()
 
     def review_step(
         self,
@@ -537,104 +413,343 @@ class PlanStore:
         summary: str,
         evidence: str | None = None,
     ) -> dict[str, Any]:
-        """Apply a review outcome to the current step."""
-        step_id = _positive_int(step_id, "step_id")
+        step_id = _positive_number(step_id, "step_id")
+        summary = _required_text(summary, "summary")
         if outcome not in _REVIEW_OUTCOMES:
             raise PlanStateError(f"Invalid review outcome: {outcome!r}.")
-        summary = _text(summary, "summary")
-        evidence = _optional_text(evidence)
-        with self._state_lock():
-            state = self._load()
-            plan = self._active_plan(state)
-            if plan.get("current_step_id") != step_id:
+        evidence = (
+            evidence.strip() if isinstance(evidence, str) and evidence.strip() else None
+        )
+        if outcome == "completed" and evidence is None:
+            raise PlanStateError("A completed step requires concrete evidence.")
+
+        with self._session(write=True) as session:
+            plan = self._active_plan(session)
+            if plan.current_step_number != step_id:
                 raise PlanStateError(f"Step {step_id} is not the current step.")
-            step = self._find_step(plan, step_id)
-            if step.get("status") != "awaiting_review":
+            step = self._step(session, plan, step_id)
+            if step.status != StepStatus.awaiting_review:
                 raise PlanStateError(
                     f"Step {step_id} has no command result awaiting review."
                 )
-            timestamp = _now()
-            step["result_summary"] = summary
-            step["evidence"] = evidence
-            if outcome == "retry":
-                step["status"] = "in_progress"
-            else:
-                step["status"] = outcome
-                step["completed_at"] = timestamp
-                plan["current_step_id"] = None
-            plan["updated_at"] = timestamp
-            self._save(state)
-            return deepcopy(state)
+            step.status = StepStatus.in_progress if outcome == "retry" else outcome
+            step.result_summary = summary
+            step.evidence = evidence
+            if outcome != "retry":
+                step.completed_at = utc_now()
+                plan.current_step_number = None
+            plan.updated_at = utc_now()
+        return self.compact_snapshot()
+
+    def revise_plan(
+        self,
+        reason: str,
+        steps: list[dict[str, str]],
+        goal: str | None = None,
+    ) -> dict[str, Any]:
+        reason = _required_text(reason, "reason")
+        definitions = _step_definitions(steps)
+        goal = _required_text(goal, "goal") if goal is not None else None
+
+        with self._session(write=True) as session:
+            plan = self._active_plan(session)
+            existing = self._steps(session, plan)
+            if plan.current_step_number is not None:
+                current = self._step(session, plan, plan.current_step_number)
+                if current.status == StepStatus.awaiting_review:
+                    raise PlanStateError(
+                        "Review the latest command result before revising the plan."
+                    )
+                latest = self._latest_attempt(session, current)
+                if latest is not None and latest.status == AttemptStatus.running:
+                    raise PlanStateError(
+                        "Finish the running command before revising the plan."
+                    )
+
+            timestamp = utc_now()
+            for step in existing:
+                if step.status in {
+                    StepStatus.pending,
+                    StepStatus.in_progress,
+                    StepStatus.failed,
+                }:
+                    step.status = StepStatus.skipped
+                    step.result_summary = f"Superseded by revision: {reason}"
+                    step.completed_at = timestamp
+
+            next_number = max((step.number for step in existing), default=0) + 1
+            session.add_all(
+                PlanStep(
+                    plan_id=plan.id,
+                    number=next_number + offset,
+                    title=title,
+                    expected_result=expected,
+                )
+                for offset, (title, expected) in enumerate(definitions)
+            )
+            plan.goal = goal or plan.goal
+            plan.revision += 1
+            plan.current_step_number = None
+            plan.updated_at = timestamp
+            session.add(
+                PlanRevision(
+                    plan_id=plan.id,
+                    number=plan.revision,
+                    reason=reason,
+                    goal=plan.goal,
+                )
+            )
+        return self.compact_snapshot()
+
+    @staticmethod
+    def _close(
+        session: Session, plan: ExecutionPlan, status: PlanStatus, summary: str
+    ) -> None:
+        timestamp = utc_now()
+        plan.status = status
+        plan.final_summary = summary
+        plan.current_step_number = None
+        plan.completed_at = timestamp
+        plan.updated_at = timestamp
+        request = session.get(PlanRequest, plan.request_id)
+        if request is None:
+            raise PlanStateError("The plan's user request no longer exists.")
+        request.status = status
+        request.finished_at = timestamp
 
     def finish_plan(self, summary: str) -> dict[str, Any]:
-        """Complete an active plan after all steps are resolved."""
-        summary = _text(summary, "summary")
-        with self._state_lock():
-            state = self._load()
-            plan = self._active_plan(state)
-            if plan.get("current_step_id") is not None:
+        summary = _required_text(summary, "summary")
+        with self._session(write=True) as session:
+            plan = self._active_plan(session)
+            if plan.current_step_number is not None:
                 raise PlanStateError(
                     "Resolve the current step before finishing the plan."
                 )
+            steps = self._steps(session, plan)
             unfinished = [
-                step["id"]
-                for step in plan["steps"]
-                if step.get("status") not in _FINISHED_STEP_STATUSES
+                step.number
+                for step in steps
+                if step.status not in {StepStatus.completed, StepStatus.skipped}
             ]
             if unfinished:
                 raise PlanStateError(f"Unfinished plan steps: {unfinished}")
-            has_completed_execution = any(
-                step.get("status") == "completed" and step.get("attempts")
-                for step in plan["steps"]
-            )
-            if not has_completed_execution:
+            if not any(
+                step.status == StepStatus.completed and step.attempt_count
+                for step in steps
+            ):
                 raise PlanStateError(
                     "At least one completed step with a command result is required."
                 )
-            timestamp = _now()
-            plan["status"] = "completed"
-            plan["final_summary"] = summary
-            plan["completed_at"] = timestamp
-            plan["updated_at"] = timestamp
-            self._save(state)
-            return deepcopy(state)
+            self._close(session, plan, PlanStatus.completed, summary)
+        return self.compact_snapshot()
+
+    def block_plan(self, summary: str) -> dict[str, Any]:
+        summary = _required_text(summary, "summary")
+        with self._session(write=True) as session:
+            plan = self._active_plan(session)
+            if plan.current_step_number is not None:
+                current = self._step(session, plan, plan.current_step_number)
+                if current.status == StepStatus.awaiting_review:
+                    raise PlanStateError(
+                        "Review the latest command result before blocking the plan."
+                    )
+                latest = self._latest_attempt(session, current)
+                if latest is not None and latest.status == AttemptStatus.running:
+                    raise PlanStateError(
+                        "Finish the running command before blocking the plan."
+                    )
+            timestamp = utc_now()
+            for step in self._steps(session, plan):
+                if step.status == StepStatus.pending:
+                    step.status = StepStatus.skipped
+                    step.result_summary = f"Blocked: {summary}"
+                    step.completed_at = timestamp
+                elif step.status == StepStatus.in_progress:
+                    step.status = StepStatus.failed
+                    step.result_summary = summary
+                    step.completed_at = timestamp
+            self._close(session, plan, PlanStatus.blocked, summary)
+        return self.compact_snapshot()
+
+    @staticmethod
+    def _attempt_data(attempt: PlanAttempt) -> dict[str, Any]:
+        return {
+            "number": attempt.number,
+            "execution_id": attempt.id,
+            "tool": attempt.tool,
+            "action": attempt.action,
+            "purpose": attempt.purpose,
+            "expected_result": attempt.expected_result,
+            "status": attempt.status,
+            "started_at": attempt.started_at,
+            "finished_at": attempt.finished_at,
+            "request": json.loads(attempt.request_json),
+            "result": json.loads(attempt.result_json) if attempt.result_json else None,
+        }
+
+    @classmethod
+    def _step_data(
+        cls, session: Session, step: PlanStep, *, full: bool
+    ) -> dict[str, Any]:
+        data = {
+            "id": step.number,
+            "plan_id": step.plan_id,
+            "title": step.title,
+            "expected_result": step.expected_result,
+            "status": step.status,
+            "attempt_count": step.attempt_count,
+            "latest_exit_code": step.latest_exit_code,
+            "started_at": step.started_at,
+            "completed_at": step.completed_at,
+            "result_summary": step.result_summary,
+            "evidence": step.evidence,
+        }
+        if full:
+            attempts = session.exec(
+                select(PlanAttempt)
+                .where(PlanAttempt.step_id == step.id)
+                .order_by(PlanAttempt.number)
+            )
+            data["attempts"] = [cls._attempt_data(attempt) for attempt in attempts]
+        return data
+
+    @classmethod
+    def _plan_data(
+        cls, session: Session, plan: ExecutionPlan, *, full: bool
+    ) -> dict[str, Any]:
+        data = {
+            "id": plan.id,
+            "request_id": plan.request_id,
+            "goal": plan.goal,
+            "status": plan.status,
+            "revision": plan.revision,
+            "current_step_id": plan.current_step_number,
+            "created_at": plan.created_at,
+            "updated_at": plan.updated_at,
+            "completed_at": plan.completed_at,
+            "final_summary": plan.final_summary,
+            "steps": [
+                cls._step_data(session, step, full=full)
+                for step in cls._steps(session, plan)
+            ],
+        }
+        if full:
+            revisions = session.exec(
+                select(PlanRevision)
+                .where(PlanRevision.plan_id == plan.id)
+                .order_by(PlanRevision.number)
+            )
+            data["revisions"] = [
+                {
+                    "number": revision.number,
+                    "reason": revision.reason,
+                    "goal": revision.goal,
+                    "created_at": revision.created_at,
+                }
+                for revision in revisions
+            ]
+        return data
+
+    @staticmethod
+    def _plan_summary(plan: ExecutionPlan) -> dict[str, Any]:
+        return {
+            "id": plan.id,
+            "goal": plan.goal,
+            "status": plan.status,
+            "revision": plan.revision,
+            "created_at": plan.created_at,
+            "completed_at": plan.completed_at,
+            "final_summary": plan.final_summary,
+        }
+
+    def _snapshot(self, session: Session, *, full: bool) -> dict[str, Any]:
+        pointer = self._pointer(session)
+        request = (
+            session.get(PlanRequest, pointer.request_id) if pointer.request_id else None
+        )
+        plan = session.get(ExecutionPlan, pointer.plan_id) if pointer.plan_id else None
+        current_request = None
+        if request is not None:
+            current_request = {
+                "id": request.id,
+                "input": request.input,
+                "status": request.status,
+                "started_at": request.started_at,
+                "finished_at": request.finished_at,
+                "plan_id": pointer.plan_id,
+            }
+            if full:
+                inputs = session.exec(
+                    select(RequestInput)
+                    .where(RequestInput.request_id == request.id)
+                    .order_by(RequestInput.received_at)
+                )
+                current_request["inputs"] = [
+                    {"input": item.input, "received_at": item.received_at}
+                    for item in inputs
+                ]
+
+        state = {
+            "version": 3,
+            "current_request": current_request,
+            "active_plan": self._plan_data(session, plan, full=full) if plan else None,
+        }
+        if full:
+            previous = session.exec(
+                select(ExecutionPlan)
+                .where(ExecutionPlan.id != pointer.plan_id)
+                .order_by(ExecutionPlan.created_at)
+            )
+            state["history"] = [self._plan_summary(item) for item in previous]
+        return state
 
     def snapshot(self) -> dict[str, Any]:
-        """Return a deep copy of the current persisted state."""
-        with self._state_lock():
-            return deepcopy(self._load())
+        with self._session() as session:
+            return self._snapshot(session, full=True)
+
+    def compact_snapshot(self) -> dict[str, Any]:
+        with self._session() as session:
+            return self._snapshot(session, full=False)
 
     def prompt_snapshot(self) -> str:
-        """Return a compact JSON snapshot suitable for prompt context."""
-        state = self.snapshot()
-        plan = state.get("active_plan")
-        request = state.get("current_request")
-        request_id = request.get("id") if isinstance(request, dict) else None
-        if not isinstance(plan, dict):
-            value = {"current_request_id": request_id, "plan": None}
-        else:
-            value = {
-                "current_request_id": request_id,
-                "plan_id": plan["id"],
-                "goal": plan["goal"],
-                "status": plan["status"],
-                "revision": plan["revision"],
-                "current_step_id": plan["current_step_id"],
-                "steps": [self._compact_step(step) for step in plan["steps"]],
-            }
-        return json.dumps(value, ensure_ascii=False, indent=2)
+        return json.dumps(self.compact_snapshot(), ensure_ascii=False, indent=2)
+
+    def list_plans(self) -> list[dict[str, Any]]:
+        with self._session() as session:
+            plans = session.exec(
+                select(ExecutionPlan).order_by(ExecutionPlan.created_at.desc())
+            )
+            return [self._plan_summary(plan) for plan in plans]
+
+    def plan_history(self, plan_id: str) -> dict[str, Any]:
+        plan_id = _required_text(plan_id, "plan_id")
+        with self._session() as session:
+            plan = session.get(ExecutionPlan, plan_id)
+            if plan is None:
+                raise PlanStateError(f"Plan {plan_id} does not exist.")
+            return self._plan_data(session, plan, full=True)
+
+    def step_history(self, step_id: int, plan_id: str | None = None) -> dict[str, Any]:
+        step_id = _positive_number(step_id, "step_id")
+        with self._session() as session:
+            selected_id = plan_id or self._pointer(session).plan_id
+            if selected_id is None:
+                raise PlanStateError("There is no current plan. Provide a plan_id.")
+            plan = session.get(ExecutionPlan, selected_id)
+            if plan is None:
+                raise PlanStateError(f"Plan {selected_id} does not exist.")
+            return self._step_data(
+                session, self._step(session, plan, step_id), full=True
+            )
+
+    def current_request_status(self) -> str | None:
+        with self._session() as session:
+            request_id = self._pointer(session).request_id
+            request = session.get(PlanRequest, request_id) if request_id else None
+            return request.status if request else None
 
     def current_request_is_complete(self) -> bool:
-        """Return whether the current request is linked to a completed plan."""
-        state = self.snapshot()
-        request = state.get("current_request")
-        plan = state.get("active_plan")
-        return (
-            isinstance(request, dict)
-            and isinstance(plan, dict)
-            and request.get("plan_id") == plan.get("id")
-            and plan.get("status") == "completed"
-        )
+        return self.current_request_status() == PlanStatus.completed
 
 
 plan_store = PlanStore()

@@ -37,16 +37,22 @@ duration, exit code, stdout, stderr, and launch error.
 Every request follows this state machine:
 
 ```text
-create plan -> start step -> execute one command -> review result -> next step -> finish plan
+create plan -> start step -> execute one command -> review result -> next step -> finish plan -> block if impossible
 ```
 
 The execution tools reject calls without a current `in_progress` step. After a command, that step is
 `awaiting_review`, and no next command can run until the model reviews the result. If the model tries
-to answer before the plan is finished, the runner continues the agent with the persisted plan state.
+to answer while the plan is active, the runner continues the agent with the persisted plan state.
 Steps must start in order, and a failed step requires an explicit plan revision before work continues.
+An impossible request can end as `blocked` after any pending command result is reviewed; the agent
+can then report the reason instead of continuing indefinitely.
 
-Plan state and full command attempts are stored per `SESSION_ID` in `<PROJECT_ROOT>/.agent/` and
-survive application restarts.
+Plan state, revisions, and full command attempts are stored with SQLModel in a separate
+`<PROJECT_ROOT>/.agent/plan-sqlmodel-<session-key>.db` SQLite database per `SESSION_ID`. Earlier
+sample databases and JSON files are left untouched. The normal `plan` response is compact; `show` can
+retrieve complete attempt history for a step or a historical plan. A live command renews its lease
+while running, so a second process cannot mistake it for an interrupted command. A stale lease is
+recovered for review after a process stops.
 
 ## Configuration
 
@@ -70,15 +76,3 @@ Use the project's virtual environment:
 ```powershell
 .\.venv\Scripts\python.exe .\main.py
 ```
-
-## Tests
-
-Run the complete suite with the same virtual environment:
-
-```powershell
-.\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
-```
-
-The suite executes the Windows command and filesystem path end to end. It validates Debian and
-macOS detection and command generation without pretending to execute those operating systems on a
-Windows host.

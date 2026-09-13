@@ -31,6 +31,16 @@ class CreatePlanInput(_PlanInput):
 
 class ShowPlanInput(_PlanInput):
     action: Literal["show"] = "show"
+    plan_id: str | None = Field(
+        default=None, description="Inspect a current or historical plan by ID."
+    )
+    step_id: int | None = Field(
+        default=None,
+        description="Show the complete attempt history for this step; omit for compact state.",
+    )
+    history: bool = Field(
+        default=False, description="List plan IDs and summaries for this session."
+    )
 
 
 class StartPlanInput(_PlanInput):
@@ -67,13 +77,21 @@ class FinishPlanInput(_PlanInput):
     )
 
 
+class BlockPlanInput(_PlanInput):
+    action: Literal["block"] = "block"
+    summary: str = Field(
+        description="Why the request cannot be completed, after reviewing any command result."
+    )
+
+
 PlanInput = Annotated[
     CreatePlanInput
     | ShowPlanInput
     | StartPlanInput
     | ReviewPlanInput
     | RevisePlanInput
-    | FinishPlanInput,
+    | FinishPlanInput
+    | BlockPlanInput,
     Field(discriminator="action"),
 ]
 
@@ -95,50 +113,61 @@ def _print_plan_event(request: PlanInput, result: dict) -> None:
 def plan(request: PlanInput) -> str:
     """Manage the mandatory persistent execution plan for every user request.
 
-    Create a small-step plan before any execution. Start exactly one pending step, execute exactly
-    one filesystem or run_command call for it, then review the complete result before any next
-    execution. Retry a correctable attempt, fail a blocked step, revise unfinished work when the
-    approach changes, and finish only after the requested outcome is genuinely achieved. The plan,
-    step statuses, full attempt history, evidence, and current position survive application restarts.
+    Create a small-step plan before any execution. Start exactly one pending step, execute one
+    filesystem or run_command attempt at a time, then review the complete result before any next
+    execution. Retry a correctable attempt, revise unfinished work when the approach changes,
+    finish only after success, or block an impossible request. Use show with step_id to inspect
+    complete attempt history. State and full results survive application restarts in SQLite.
 
     Args:
-        request: Action-specific create, show, start, review, revise, or finish transition.
+        request: Action-specific create, show, start, review, revise, finish, or block transition.
     """
 
     try:
         if not request.purpose.strip() or not request.expected_result.strip():
             raise PlanStateError("purpose and expected_result are required.")
         if isinstance(request, CreatePlanInput):
-            result = plan_store.create_plan(
+            plan_store.create_plan(
                 request.goal,
                 [step.model_dump() for step in request.steps],
             )
         elif isinstance(request, ShowPlanInput):
-            result = plan_store.snapshot()
+            if request.step_id is not None:
+                result = plan_store.step_history(request.step_id, request.plan_id)
+            elif request.plan_id is not None:
+                result = plan_store.plan_history(request.plan_id)
+            elif request.history:
+                result = plan_store.list_plans()
+            else:
+                result = plan_store.compact_snapshot()
         elif isinstance(request, StartPlanInput):
-            result = plan_store.start_step(request.step_id)
+            plan_store.start_step(request.step_id)
         elif isinstance(request, ReviewPlanInput):
-            result = plan_store.review_step(
+            plan_store.review_step(
                 step_id=request.step_id,
                 outcome=request.review_outcome,
                 summary=request.summary,
                 evidence=request.evidence,
             )
         elif isinstance(request, RevisePlanInput):
-            result = plan_store.revise_plan(
+            plan_store.revise_plan(
                 reason=request.revision_reason,
                 steps=[step.model_dump() for step in request.steps],
                 goal=request.goal,
             )
+        elif isinstance(request, FinishPlanInput):
+            plan_store.finish_plan(request.summary)
         else:
-            result = plan_store.finish_plan(request.summary)
+            plan_store.block_plan(request.summary)
+        if not isinstance(request, ShowPlanInput):
+            result = plan_store.compact_snapshot()
         response = {"ok": True, "action": request.action, "state": result}
     except (PlanStateError, ValueError) as exc:
         response = {
             "ok": False,
             "action": request.action,
             "error": str(exc),
-            "state": plan_store.snapshot(),
+            "state": plan_store.compact_snapshot(),
         }
     _print_plan_event(request, response)
     return json.dumps(response, ensure_ascii=False, indent=2)

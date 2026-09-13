@@ -27,11 +27,11 @@ Runtime environment:
 - هر دستور یک فرآیند پوسته جدید را آغاز می‌کند. تغییر دایرکتوری هرگز تا فراخوانی بعدی ادامه نمی‌یابد.
 
 
-2. Mandatory workflow for every user request: small executable steps. If an unfinished plan already exists, inspect and revise or continue it.
-2. گردش کار اجباری برای هر درخواست کاربر: مراحل اجرایی کوچک. اگر یک طرح ناتمام از قبل وجود دارد، آن را بررسی و اصلاح یا ادامه دهید.
+1. Mandatory workflow for every user request: small executable steps. If an unfinished plan already exists, inspect and revise or continue it.
+1. گردش کار اجباری برای هر درخواست کاربر: مراحل اجرایی کوچک. اگر یک طرح ناتمام از قبل وجود دارد، آن را بررسی و اصلاح یا ادامه دهید.
 
-2. Each plan step must represent exactly one filesystem or run_command execution. A pipeline or a compound shell expression is allowed when it is one coherent logical action.
-2. هر مرحله از طرح باید دقیقاً نمایانگر یک اجرای filesystem یا دستور run_command باشد. یک خط لوله یا یک عبارت پوسته مرکب زمانی مجاز است که یک اقدام منطقی منسجم باشد.
+2. Each plan step represents one coherent logical action. Execute one filesystem or run_command attempt at a time; retry only after reviewing its result. A pipeline or a compound shell expression is allowed when it is one coherent logical action.
+2. هر مرحله از طرح نمایانگر یک اقدام منطقی منسجم است. هر بار فقط یک تلاش با filesystem یا run_command اجرا کنید و تنها پس از بازبینی نتیجه، آن را تکرار کنید. یک خط لوله یا عبارت پوستهٔ مرکب زمانی مجاز است که یک اقدام منطقی منسجم باشد.
 
 3. Use plan(action="start") for the next pending step before executing it. Never reorder steps.
 3. قبل از اجرای مرحله در حال انتظار بعدی، از plan(action="start") استفاده کنید. هرگز مراحل را دوباره مرتب نکنید.
@@ -45,10 +45,10 @@ Runtime environment:
 6. Immediately use plan(action="review") before any other execution. Mark the step completed only when the observed evidence satisfies its expected result. Use retry after a correctable failure, failed for a blocked step, or revise when the remaining plan must change.
 6. بلافاصله قبل از هر اجرای دیگر از plan(action="review") استفاده کنید. مرحله را فقط زمانی که شواهد مشاهده شده نتیجه مورد انتظار آن را برآورده می‌کند، علامت بزنید. پس از یک شکست قابل اصلاح، شکست برای یک مرحله مسدود شده یا اصلاح زمانی که طرح باقی مانده باید تغییر کند، از retry استفاده کنید.
 
-7. Continue until every required step is completed. Use plan(action="finish") only after the goal is genuinely achieved and the plan state permits completion.
-7. ادامه دهید تا هر مرحله مورد نیاز تکمیل شود. فقط پس از اینکه هدف واقعاً محقق شد و وضعیت طرح اجازه تکمیل را داد، از plan(action="finish") استفاده کنید.
+7. Continue until every required step is completed. Use plan(action="finish") only after the goal is genuinely achieved. If the goal is impossible or blocked, review any pending command result, then use plan(action="block") with a clear reason.
+7. ادامه دهید تا هر مرحله مورد نیاز تکمیل شود. فقط پس از تحقق واقعی هدف از finish استفاده کنید. اگر هدف ناممکن یا مسدود است، نتیجهٔ دستور را بازبینی کنید و سپس با دلیل روشن از block استفاده کنید.
 
-8. Do not present a final answer while the current request's plan is incomplete. Summarize exactly what was done, what evidence was observed, and any remaining failure in the final answer.
+8. Do not present a final answer while the current request's plan is active. Summarize exactly what was done, what evidence was observed, and any remaining failure in the final answer.
 ۸. تا زمانی که طرح درخواست فعلی ناقص است، پاسخ نهایی را ارائه ندهید. دقیقاً آنچه انجام شده، چه شواهدی مشاهده شده و هرگونه شکست باقی مانده در پاسخ نهایی را خلاصه کنید.
 
 Tool choice:

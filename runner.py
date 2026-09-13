@@ -3,11 +3,11 @@ from openai.types.responses import (
     ResponseReasoningSummaryTextDeltaEvent,
     ResponseTextDeltaEvent,
 )
-from app.agent import create_agent
 from app.input import get_input
-from app.plan import plan_store
-from app.session import create_session
 from app.settings import settings
+from app.agent import create_agent
+from app.session import create_session
+from app.plan import PlanStateError, plan_store
 from tools.environment import (
     EnvironmentDetectionError,
     configure_utf8_stdio,
@@ -58,7 +58,10 @@ async def run_agent() -> None:
     print("\tcommand_timeout=disabled")
     print("\toutput_limit=disabled\n")
     user_input = await get_input()
-    plan_store.begin_request(user_input)
+    try:
+        plan_store.begin_request(user_input)
+    except PlanStateError as exc:
+        raise SystemExit(f"Cannot start request: {exc}") from exc
     agent = create_agent()
     session = create_session()
     run_config = RunConfig(
@@ -75,7 +78,7 @@ async def run_agent() -> None:
         input_tokens += usage.input_tokens
         output_tokens += usage.output_tokens
         total_tokens += usage.total_tokens
-        if plan_store.current_request_is_complete():
+        if plan_store.current_request_status() in {"completed", "blocked"}:
             break
         continuation += 1
         print("\n" + "!" * 80)
@@ -89,7 +92,8 @@ async def run_agent() -> None:
             "Continue the current request. Your previous response was not accepted because the "
             "persistent plan is incomplete. Inspect the current plan state in your instructions, "
             "perform the next required plan transition or execution, review every result, finish "
-            "the plan only when the original goal is achieved, and then provide the final answer."
+            "only when the goal is achieved, or block an impossible request with a clear reason. "
+            "Then provide the final answer."
         )
     print(
         "\n"

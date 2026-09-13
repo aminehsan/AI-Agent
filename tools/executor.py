@@ -5,6 +5,7 @@ import codecs
 import asyncio
 from typing import Any
 from time import monotonic
+from contextlib import suppress
 from datetime import UTC, datetime
 from .environment import (
     configure_utf8_stdio,
@@ -31,6 +32,17 @@ def _get_execution_lock() -> asyncio.Lock:
 
 def _timestamp() -> str:
     return datetime.now(UTC).isoformat()
+
+
+async def _renew_execution_lease(execution_id: str) -> None:
+    """Keep long-running commands owned without imposing a command timeout."""
+    while True:
+        await asyncio.sleep(5)
+        try:
+            await asyncio.to_thread(plan_store.touch_execution, execution_id)
+        except PlanStateError as exc:
+            print(f"Plan lease renewal stopped: {exc}", file=sys.stderr)
+            return
 
 
 def _print_block(title: str, value: Any) -> None:
@@ -115,6 +127,9 @@ async def execute_command(
                 "request": request_details,
                 "plan": json.loads(plan_store.prompt_snapshot()),
             }
+        heartbeat = asyncio.create_task(
+            _renew_execution_lease(reservation["execution_id"])
+        )
         invocation = runtime.invocation(command)
         started_at = _timestamp()
         started_clock = monotonic()
@@ -183,6 +198,10 @@ async def execute_command(
             stderr = ""
             exit_code = None
             launch_error = f"{type(exc).__name__}: {exc}"
+        finally:
+            heartbeat.cancel()
+            with suppress(asyncio.CancelledError):
+                await heartbeat
         finished_at = _timestamp()
         duration_seconds = monotonic() - started_clock
         result = {
@@ -215,6 +234,7 @@ async def execute_command(
             step_id=step_id,
             attempt_number=reservation["attempt_number"],
             result=result,
+            execution_id=reservation["execution_id"],
         )
         print()
         _print_block("Finished at", finished_at)
