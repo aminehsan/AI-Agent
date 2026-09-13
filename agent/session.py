@@ -1,6 +1,5 @@
 from agents import SQLiteSession
-from .settings import settings
-from .project import get_session_database_path
+from settings import get_session_database_path, settings
 
 
 def create_session() -> SQLiteSession:

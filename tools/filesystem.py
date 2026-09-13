@@ -1,8 +1,8 @@
 from pathlib import Path
 from collections.abc import Callable
 from agents import function_tool
-from app.plan import plan_store
-from app.settings import settings
+from settings import settings
+from plan.store import plan_store
 
 IGNORED_DIRECTORIES = {
     "__pycache__",
