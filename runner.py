@@ -3,10 +3,10 @@ from openai.types.responses import (
     ResponseReasoningSummaryTextDeltaEvent,
     ResponseTextDeltaEvent,
 )
-from app.agent import create_agent
 from app.input import get_input
-from app.plan import PlanStateError, plan_store
+from app.agent import create_agent
 from app.session import create_session
+from app.plan import PlanStateError, plan_store
 
 
 async def _stream_agent(agent, prompt: str, session):
@@ -40,7 +40,6 @@ async def run_agent() -> None:
         plan_store.begin_request(user_input)
     except PlanStateError as exc:
         raise SystemExit(f"Cannot start request: {exc}") from exc
-
     agent = create_agent()
     session = create_session()
     prompt = user_input
@@ -48,17 +47,14 @@ async def run_agent() -> None:
     output_tokens = 0
     total_tokens = 0
     continuations = 0
-
     while True:
         result = await _stream_agent(agent, prompt, session)
         usage = result.context_wrapper.usage
         input_tokens += usage.input_tokens
         output_tokens += usage.output_tokens
         total_tokens += usage.total_tokens
-
         if plan_store.current_request_status() in {"completed", "blocked"}:
             break
-
         continuations += 1
         print("\n\nPLAN GATE: the request is still active; continuing the agent.")
         print(plan_store.prompt_snapshot())
@@ -68,7 +64,6 @@ async def run_agent() -> None:
             "result, and finish only after the goal is achieved. If the request is impossible, "
             "block the plan with a clear reason before answering."
         )
-
     print(
         "\n\n"
         f"Token usage:\n"

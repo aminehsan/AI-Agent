@@ -1,15 +1,12 @@
-import json
+from json import dumps
 from typing import Annotated, Literal
-
 from agents import function_tool
 from pydantic import BaseModel, ConfigDict, Field
-
 from app.plan import PlanStateError, plan_store
 
 
 class PlanStepInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     title: str = Field(description="One small executable plan step.")
     expected_result: str = Field(
         description="Observable evidence required to complete the step."
@@ -18,7 +15,6 @@ class PlanStepInput(BaseModel):
 
 class _PlanActionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     purpose: str = Field(description="Why this plan transition is needed now.")
     expected_result: str = Field(
         description="The expected plan state after this transition."
@@ -104,7 +100,7 @@ def _print_plan_transition(request: PlanInput, response: dict) -> None:
     print(f"Purpose:\n{request.purpose}")
     print(f"Expected result:\n{request.expected_result}")
     print("Plan result:")
-    print(json.dumps(response, ensure_ascii=False, indent=2))
+    print(dumps(response, ensure_ascii=False, indent=2))
     print("=" * 80 + "\n")
 
 
@@ -124,7 +120,6 @@ def plan(request: PlanInput) -> str:
     try:
         if not request.purpose.strip() or not request.expected_result.strip():
             raise PlanStateError("purpose and expected_result are required.")
-
         if isinstance(request, CreatePlanInput):
             result = plan_store.create_plan(
                 request.goal,
@@ -158,7 +153,6 @@ def plan(request: PlanInput) -> str:
             result = plan_store.finish_plan(request.summary)
         else:
             result = plan_store.block_plan(request.summary)
-
         response = {"ok": True, "action": request.action, "state": result}
     except (PlanStateError, ValueError) as exc:
         response = {
@@ -167,6 +161,5 @@ def plan(request: PlanInput) -> str:
             "error": str(exc),
             "state": plan_store.compact_snapshot(),
         }
-
     _print_plan_transition(request, response)
-    return json.dumps(response, ensure_ascii=False, indent=2)
+    return dumps(response, ensure_ascii=False, indent=2)
