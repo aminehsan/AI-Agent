@@ -1,4 +1,3 @@
-from __future__ import annotations
 import json
 from agents import function_tool
 from pydantic import BaseModel, ConfigDict, Field

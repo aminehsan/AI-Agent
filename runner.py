@@ -1,4 +1,3 @@
-from __future__ import annotations
 from agents import RawResponsesStreamEvent, RunConfig, Runner, ToolExecutionConfig
 from openai.types.responses import (
     ResponseReasoningSummaryTextDeltaEvent,

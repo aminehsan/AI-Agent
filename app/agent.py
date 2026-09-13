@@ -1,4 +1,3 @@
-from __future__ import annotations
 from agents import Agent, ModelSettings, RunContextWrapper
 from tools import filesystem, plan, run_command
 from tools.environment import get_runtime_environment
