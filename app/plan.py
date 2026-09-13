@@ -1,6 +1,5 @@
 import time
 import json
-import hashlib
 from pathlib import Path
 from functools import lru_cache
 from contextlib import contextmanager
@@ -74,7 +73,7 @@ def _json(value: dict[str, Any]) -> str:
 
 @lru_cache(maxsize=64)
 def _engine(path: Path) -> Engine:
-    """Build one engine per session database; old sample databases are untouched."""
+    """Open the shared plan database without touching older plan files."""
     engine = create_engine(
         URL.create("sqlite", database=str(path)), connect_args={"timeout": 10}
     )
@@ -97,12 +96,6 @@ def _engine(path: Path) -> Engine:
         connection.exec_driver_sql("BEGIN")
 
     SQLModel.metadata.create_all(engine)
-    with Session(engine) as session, session.begin():
-        session.exec(
-            sqlite_insert(PlanPointer)
-            .values(id=1, version=0)
-            .on_conflict_do_nothing(index_elements=["id"])
-        )
     return engine
 
 
@@ -113,12 +106,14 @@ class PlanStore:
         self._session_id = session_id
 
     @property
-    def path(self) -> Path:
-        session_id = _required_text(
+    def session_id(self) -> str:
+        return _required_text(
             self._session_id or settings.session_id, "session_id"
         )
-        key = hashlib.sha256(session_id.encode()).hexdigest()[:16]
-        return get_project_state_directory() / f"plan-sqlmodel-{key}.db"
+
+    @property
+    def path(self) -> Path:
+        return get_project_state_directory() / "plan.db"
 
     @contextmanager
     def _session(self, *, write: bool = False) -> Iterator[Session]:
@@ -126,11 +121,16 @@ class PlanStore:
             with Session(_engine(self.path), expire_on_commit=False) as session:
                 with session.begin():
                     if write:
-                        # The first statement acquires SQLite's writer reservation.
-                        # Read/check/update transitions then stay atomic across processes.
+                        # The session row identifies this agent conversation. The
+                        # first write reserves SQLite's writer lock for the transition.
+                        session.exec(
+                            sqlite_insert(PlanPointer)
+                            .values(session_id=self.session_id, version=0)
+                            .on_conflict_do_nothing(index_elements=["session_id"])
+                        )
                         session.exec(
                             update(PlanPointer)
-                            .where(PlanPointer.id == 1)
+                            .where(PlanPointer.session_id == self.session_id)
                             .values(version=PlanPointer.version + 1)
                         )
                     yield session
@@ -139,17 +139,37 @@ class PlanStore:
                 f"Cannot access plan database {self.path}: {exc}"
             ) from exc
 
-    @staticmethod
-    def _pointer(session: Session) -> PlanPointer:
-        pointer = session.get(PlanPointer, 1)
-        if pointer is None:
-            raise PlanStateError("Plan database has no session pointer.")
-        return pointer
+    def _pointer(self, session: Session) -> PlanPointer:
+        pointer = session.get(PlanPointer, self.session_id)
+        return pointer if pointer is not None else PlanPointer(session_id=self.session_id)
 
-    @classmethod
-    def _active_plan(cls, session: Session) -> ExecutionPlan:
-        pointer = cls._pointer(session)
-        plan = session.get(ExecutionPlan, pointer.plan_id) if pointer.plan_id else None
+    def _request_for_session(
+        self, session: Session, request_id: str | None
+    ) -> PlanRequest | None:
+        if request_id is None:
+            return None
+        return session.exec(
+            select(PlanRequest).where(
+                PlanRequest.id == request_id,
+                PlanRequest.session_id == self.session_id,
+            )
+        ).one_or_none()
+
+    def _plan_for_session(
+        self, session: Session, plan_id: str | None
+    ) -> ExecutionPlan | None:
+        if plan_id is None:
+            return None
+        return session.exec(
+            select(ExecutionPlan).where(
+                ExecutionPlan.id == plan_id,
+                ExecutionPlan.session_id == self.session_id,
+            )
+        ).one_or_none()
+
+    def _active_plan(self, session: Session) -> ExecutionPlan:
+        pointer = self._pointer(session)
+        plan = self._plan_for_session(session, pointer.plan_id)
         if plan is None or plan.status != PlanStatus.active:
             raise PlanStateError("There is no active plan. Create a plan first.")
         return plan
@@ -189,14 +209,8 @@ class PlanStore:
         user_input = _required_text(user_input, "user_input")
         with self._session(write=True) as session:
             pointer = self._pointer(session)
-            plan = (
-                session.get(ExecutionPlan, pointer.plan_id) if pointer.plan_id else None
-            )
-            request = (
-                session.get(PlanRequest, pointer.request_id)
-                if pointer.request_id
-                else None
-            )
+            plan = self._plan_for_session(session, pointer.plan_id)
+            request = self._request_for_session(session, pointer.request_id)
             continuing = request is not None and request.status == PlanStatus.active
 
             if continuing and plan is not None and plan.current_step_number is not None:
@@ -222,7 +236,7 @@ class PlanStore:
                     plan.updated_at = attempt.finished_at
 
             if not continuing:
-                request = PlanRequest(input=user_input)
+                request = PlanRequest(session_id=self.session_id, input=user_input)
                 session.add(request)
                 pointer.request_id = request.id
                 pointer.plan_id = None
@@ -235,17 +249,15 @@ class PlanStore:
         definitions = _step_definitions(steps)
         with self._session(write=True) as session:
             pointer = self._pointer(session)
-            request = (
-                session.get(PlanRequest, pointer.request_id)
-                if pointer.request_id
-                else None
-            )
+            request = self._request_for_session(session, pointer.request_id)
             if request is None or request.status != PlanStatus.active:
                 raise PlanStateError("No active user request exists.")
             if pointer.plan_id is not None:
                 raise PlanStateError("A plan already exists. Revise it instead.")
 
-            plan = ExecutionPlan(request_id=request.id, goal=goal)
+            plan = ExecutionPlan(
+                session_id=self.session_id, request_id=request.id, goal=goal
+            )
             session.add(plan)
             session.add_all(
                 PlanStep(
@@ -354,7 +366,15 @@ class PlanStore:
     def touch_execution(self, execution_id: str) -> None:
         execution_id = _required_text(execution_id, "execution_id")
         with self._session(write=True) as session:
-            attempt = session.get(PlanAttempt, execution_id)
+            attempt = session.exec(
+                select(PlanAttempt)
+                .join(PlanStep)
+                .join(ExecutionPlan)
+                .where(
+                    PlanAttempt.id == execution_id,
+                    ExecutionPlan.session_id == self.session_id,
+                )
+            ).one_or_none()
             if attempt is None or attempt.status != AttemptStatus.running:
                 raise PlanStateError("The execution is no longer running.")
             attempt.lease_until = time.time() + _LEASE_SECONDS
@@ -512,7 +532,7 @@ class PlanStore:
         plan.completed_at = timestamp
         plan.updated_at = timestamp
         request = session.get(PlanRequest, plan.request_id)
-        if request is None:
+        if request is None or request.session_id != plan.session_id:
             raise PlanStateError("The plan's user request no longer exists.")
         request.status = status
         request.finished_at = timestamp
@@ -664,10 +684,8 @@ class PlanStore:
 
     def _snapshot(self, session: Session, *, full: bool) -> dict[str, Any]:
         pointer = self._pointer(session)
-        request = (
-            session.get(PlanRequest, pointer.request_id) if pointer.request_id else None
-        )
-        plan = session.get(ExecutionPlan, pointer.plan_id) if pointer.plan_id else None
+        request = self._request_for_session(session, pointer.request_id)
+        plan = self._plan_for_session(session, pointer.plan_id)
         current_request = None
         if request is not None:
             current_request = {
@@ -697,7 +715,10 @@ class PlanStore:
         if full:
             previous = session.exec(
                 select(ExecutionPlan)
-                .where(ExecutionPlan.id != pointer.plan_id)
+                .where(
+                    ExecutionPlan.session_id == self.session_id,
+                    ExecutionPlan.id != pointer.plan_id,
+                )
                 .order_by(ExecutionPlan.created_at)
             )
             state["history"] = [self._plan_summary(item) for item in previous]
@@ -717,14 +738,16 @@ class PlanStore:
     def list_plans(self) -> list[dict[str, Any]]:
         with self._session() as session:
             plans = session.exec(
-                select(ExecutionPlan).order_by(ExecutionPlan.created_at.desc())
+                select(ExecutionPlan)
+                .where(ExecutionPlan.session_id == self.session_id)
+                .order_by(ExecutionPlan.created_at.desc())
             )
             return [self._plan_summary(plan) for plan in plans]
 
     def plan_history(self, plan_id: str) -> dict[str, Any]:
         plan_id = _required_text(plan_id, "plan_id")
         with self._session() as session:
-            plan = session.get(ExecutionPlan, plan_id)
+            plan = self._plan_for_session(session, plan_id)
             if plan is None:
                 raise PlanStateError(f"Plan {plan_id} does not exist.")
             return self._plan_data(session, plan, full=True)
@@ -735,7 +758,7 @@ class PlanStore:
             selected_id = plan_id or self._pointer(session).plan_id
             if selected_id is None:
                 raise PlanStateError("There is no current plan. Provide a plan_id.")
-            plan = session.get(ExecutionPlan, selected_id)
+            plan = self._plan_for_session(session, selected_id)
             if plan is None:
                 raise PlanStateError(f"Plan {selected_id} does not exist.")
             return self._step_data(
@@ -745,7 +768,7 @@ class PlanStore:
     def current_request_status(self) -> str | None:
         with self._session() as session:
             request_id = self._pointer(session).request_id
-            request = session.get(PlanRequest, request_id) if request_id else None
+            request = self._request_for_session(session, request_id)
             return request.status if request else None
 
     def current_request_is_complete(self) -> bool:

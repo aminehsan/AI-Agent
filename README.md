@@ -47,11 +47,12 @@ Steps must start in order, and a failed step requires an explicit plan revision 
 An impossible request can end as `blocked` after any pending command result is reviewed; the agent
 can then report the reason instead of continuing indefinitely.
 
-Plan state, revisions, and full command attempts are stored with SQLModel in a separate
-`<PROJECT_ROOT>/.agent/plan-sqlmodel-<session-key>.db` SQLite database per `SESSION_ID`. Earlier
-sample databases and JSON files are left untouched. The normal `plan` response is compact; `show` can
-retrieve complete attempt history for a step or a historical plan. A live command renews its lease
-while running, so a second process cannot mistake it for an interrupted command. A stale lease is
+Plan state, revisions, and full command attempts for every `SESSION_ID` are stored with SQLModel in
+one shared `<PROJECT_ROOT>/.agent/plan.db` SQLite database. Sessions are separated by `SESSION_ID`
+inside its tables, while conversation history remains in the separate `conversation.db` file.
+Earlier sample databases and JSON files are left untouched. The normal `plan` response is compact;
+`show` can retrieve complete attempt history for a step or a historical plan. A live command renews
+its lease while running, so a second process cannot mistake it for an interrupted command. A stale lease is
 recovered for review after a process stops.
 
 ## Configuration

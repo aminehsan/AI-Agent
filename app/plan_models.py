@@ -39,6 +39,7 @@ class PlanRequest(SQLModel, table=True):
     __tablename__ = "plan_requests"
 
     id: str = Field(default_factory=new_id, primary_key=True)
+    session_id: str = Field(index=True)
     input: str
     status: str = Field(default=PlanStatus.active)
     started_at: str = Field(default_factory=utc_now)
@@ -64,6 +65,7 @@ class ExecutionPlan(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("request_id"),)
 
     id: str = Field(default_factory=new_id, primary_key=True)
+    session_id: str = Field(index=True)
     request_id: str = Field(foreign_key="plan_requests.id", index=True)
     goal: str
     status: str = Field(default=PlanStatus.active)
@@ -136,11 +138,11 @@ class PlanRevision(SQLModel, table=True):
 
 
 class PlanPointer(SQLModel, table=True):
-    """The current request and plan within a per-session database."""
+    """The current request and plan for one session in the shared database."""
 
     __tablename__ = "plan_pointer"
 
-    id: int = Field(default=1, primary_key=True)
+    session_id: str = Field(primary_key=True)
     version: int = 0
     request_id: str | None = Field(default=None, foreign_key="plan_requests.id")
     plan_id: str | None = Field(default=None, foreign_key="execution_plans.id")
