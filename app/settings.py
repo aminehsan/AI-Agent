@@ -1,6 +1,6 @@
 from pathlib import Path
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import DirectoryPath, SecretStr, computed_field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     agent_instructions: str
     session_id: str = "default"
     database_name: str = "conversation.db"
+    workflow_database_name: str = "workflow.db"
     project_root: DirectoryPath
     project_state_directory_name: str = ".agent"
 
@@ -34,15 +35,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-
-def get_project_state_directory() -> Path:
-    settings.project_state_directory.mkdir(parents=True, exist_ok=True)
-    gitignore = settings.project_state_directory / ".gitignore"
-    if not gitignore.exists():
-        gitignore.write_text("*\n", encoding="utf-8")
-    return settings.project_state_directory
-
-
-def get_session_database_path() -> Path:
-    return get_project_state_directory() / settings.database_name

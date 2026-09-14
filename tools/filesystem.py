@@ -1,8 +1,10 @@
-from pathlib import Path
+import json
+import subprocess
 from collections.abc import Callable
+from pathlib import Path
 from agents import function_tool
-from settings import settings
-from plan.store import plan_store
+from app.settings import settings
+
 
 IGNORED_DIRECTORIES = {
     "__pycache__",
@@ -42,159 +44,111 @@ def get_project_files() -> list[str]:
     return sorted(files)
 
 
-def read_project_file(path: str) -> str:
-    file_path = resolve_project_path(path)
-    if not file_path.is_file():
-        raise FileNotFoundError(f"File not found: {path}")
-    return file_path.read_text(encoding="utf-8")
-
-
-def write_project_file(path: str, content: str) -> str:
-    file_path = resolve_project_path(path)
-    existed = file_path.exists()
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text(content, encoding="utf-8")
-    action = "Updated" if existed else "Created"
-    return f"{action}: {path}"
-
-
-def edit_project_file(path: str, old_text: str, new_text: str) -> str:
-    file_path = resolve_project_path(path)
-    if not file_path.is_file():
-        raise FileNotFoundError(f"File not found: {path}")
-    content = file_path.read_text(encoding="utf-8")
-    occurrences = content.count(old_text)
-    if occurrences == 0:
-        raise ValueError("The requested text was not found.")
-    if occurrences > 1:
-        raise ValueError("The requested text occurs more than once.")
-    file_path.write_text(content.replace(old_text, new_text, 1), encoding="utf-8")
-    return f"Updated: {path}"
-
-
-def _execute_planned_tool(
-    *,
-    step_id: int,
-    tool_name: str,
-    action: str,
-    purpose: str,
-    expected_result: str,
-    arguments: dict[str, str],
-    operation: Callable[[], str],
-) -> str:
-    """Run one existing filesystem operation through the active plan gate."""
-    reservation = plan_store.begin_execution(
-        step_id=step_id,
-        tool_name=tool_name,
-        action=action,
-        purpose=purpose,
-        expected_result=expected_result,
-        details={
-            "tool": tool_name,
-            "action": action,
-            "purpose": purpose,
-            "expected_result": expected_result,
-            "arguments": arguments,
-        },
-    )
-
+def _tool_result(tool: str, operation: Callable[[], object]) -> str:
     try:
         output = operation()
+        return json.dumps(
+            {"ok": True, "tool": tool, "output": output},
+            ensure_ascii=False,
+        )
     except Exception as exc:
-        plan_store.finish_execution(
-            step_id=step_id,
-            attempt_number=reservation["attempt_number"],
-            execution_id=reservation["execution_id"],
-            result={
+        return json.dumps(
+            {
                 "ok": False,
-                "exit_code": 1,
+                "tool": tool,
                 "error": f"{type(exc).__name__}: {exc}",
             },
+            ensure_ascii=False,
         )
-        raise
-
-    plan_store.finish_execution(
-        step_id=step_id,
-        attempt_number=reservation["attempt_number"],
-        execution_id=reservation["execution_id"],
-        result={"ok": True, "exit_code": 0, "output": output},
-    )
-    return output
 
 
 @function_tool
-def list_files(
-    step_id: int,
-    purpose: str,
-    expected_result: str,
-) -> str:
-    """List project paths for the current in-progress plan step."""
-    return _execute_planned_tool(
-        step_id=step_id,
-        tool_name="list_files",
-        action="list",
-        purpose=purpose,
-        expected_result=expected_result,
-        arguments={},
-        operation=lambda: "\n".join(get_project_files()) or "No files found.",
-    )
+def list_files() -> str:
+    """List all accessible files under the configured project root."""
+    return _tool_result("list_files", get_project_files)
 
 
 @function_tool
-def read_file(
-    step_id: int,
-    purpose: str,
-    expected_result: str,
-    path: str,
-) -> str:
-    """Read a UTF-8 file for the current in-progress plan step."""
-    return _execute_planned_tool(
-        step_id=step_id,
-        tool_name="read_file",
-        action="read",
-        purpose=purpose,
-        expected_result=expected_result,
-        arguments={"path": path},
-        operation=lambda: read_project_file(path),
-    )
+def read_file(path: str) -> str:
+    """Read a UTF-8 project file using a path relative to the project root."""
+
+    def read() -> str:
+        file_path = resolve_project_path(path)
+        if not file_path.is_file():
+            raise FileNotFoundError(f"File not found: {path}")
+        return file_path.read_text(encoding="utf-8")
+
+    return _tool_result("read_file", read)
 
 
 @function_tool
-def write_file(
-    step_id: int,
-    purpose: str,
-    expected_result: str,
-    path: str,
-    content: str,
-) -> str:
-    """Create or overwrite a UTF-8 file for the current plan step."""
-    return _execute_planned_tool(
-        step_id=step_id,
-        tool_name="write_file",
-        action="write",
-        purpose=purpose,
-        expected_result=expected_result,
-        arguments={"path": path, "content": content},
-        operation=lambda: write_project_file(path, content),
-    )
+def write_file(path: str, content: str) -> str:
+    """Create or overwrite a UTF-8 project file."""
+
+    def write() -> str:
+        file_path = resolve_project_path(path)
+        existed = file_path.exists()
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content, encoding="utf-8")
+        return f"{'Updated' if existed else 'Created'}: {path}"
+
+    return _tool_result("write_file", write)
 
 
 @function_tool
-def edit_file(
-    step_id: int,
-    purpose: str,
-    expected_result: str,
-    path: str,
-    old_text: str,
-    new_text: str,
-) -> str:
-    """Replace one exact text occurrence for the current plan step."""
-    return _execute_planned_tool(
-        step_id=step_id,
-        tool_name="edit_file",
-        action="edit",
-        purpose=purpose,
-        expected_result=expected_result,
-        arguments={"path": path, "old_text": old_text, "new_text": new_text},
-        operation=lambda: edit_project_file(path, old_text, new_text),
-    )
+def edit_file(path: str, old_text: str, new_text: str) -> str:
+    """Replace one exact text occurrence in an existing UTF-8 project file."""
+
+    def edit() -> str:
+        file_path = resolve_project_path(path)
+        if not file_path.is_file():
+            raise FileNotFoundError(f"File not found: {path}")
+        content = file_path.read_text(encoding="utf-8")
+        occurrences = content.count(old_text)
+        if occurrences == 0:
+            raise ValueError("The requested text was not found.")
+        if occurrences > 1:
+            raise ValueError("The requested text occurs more than once.")
+        file_path.write_text(content.replace(old_text, new_text, 1), encoding="utf-8")
+        return f"Updated: {path}"
+
+    return _tool_result("edit_file", edit)
+
+
+@function_tool
+def run_command(program: str, arguments: list[str]) -> str:
+    """Run one program in the project root without a shell and return its result."""
+    try:
+        completed = subprocess.run(
+            [program, *arguments],
+            cwd=settings.project_root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+            check=False,
+        )
+        return json.dumps(
+            {
+                "ok": completed.returncode == 0,
+                "tool": "run_command",
+                "program": program,
+                "arguments": arguments,
+                "exit_code": completed.returncode,
+                "stdout": completed.stdout,
+                "stderr": completed.stderr,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as exc:
+        return json.dumps(
+            {
+                "ok": False,
+                "tool": "run_command",
+                "program": program,
+                "arguments": arguments,
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+            ensure_ascii=False,
+        )

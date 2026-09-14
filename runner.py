@@ -1,74 +1,30 @@
-from agents import RawResponsesStreamEvent, Runner
-from openai.types.responses import (
-    ResponseReasoningSummaryTextDeltaEvent,
-    ResponseTextDeltaEvent,
-)
-from agent.input import get_input
-from agent.factory import create_agent
-from agent.session import create_session
-from plan.store import PlanStateError, plan_store
-
-
-async def _stream_agent(agent, prompt: str, session):
-    result = Runner.run_streamed(
-        starting_agent=agent,
-        input=prompt,
-        session=session,
-        max_turns=None,
-    )
-    reasoning_started = False
-    answer_started = False
-    async for event in result.stream_events():
-        if not isinstance(event, RawResponsesStreamEvent):
-            continue
-        if isinstance(event.data, ResponseReasoningSummaryTextDeltaEvent):
-            if not reasoning_started:
-                print("Reasoning:")
-                reasoning_started = True
-            print(event.data.delta, end="", flush=True)
-        elif isinstance(event.data, ResponseTextDeltaEvent):
-            if not answer_started:
-                print("\n\nAnswer:")
-                answer_started = True
-            print(event.data.delta, end="", flush=True)
-    return result
+from app.input import get_input
+from app.project import get_workflow_database_path
+from app.session import create_session
+from app.settings import settings
+from workflow.controller import WorkflowController
+from workflow.session import SQLiteWorkflowSession
 
 
 async def run_agent() -> None:
     user_input = await get_input()
+    controller = WorkflowController(
+        workflow_session=SQLiteWorkflowSession(
+            session_id=settings.session_id,
+            db_path=get_workflow_database_path(),
+        ),
+        conversation_session=create_session(),
+    )
     try:
-        plan_store.begin_request(user_input)
-    except PlanStateError as exc:
-        raise SystemExit(f"Cannot start request: {exc}") from exc
-    agent = create_agent()
-    session = create_session()
-    prompt = user_input
-    input_tokens = 0
-    output_tokens = 0
-    total_tokens = 0
-    continuations = 0
-    while True:
-        result = await _stream_agent(agent, prompt, session)
-        usage = result.context_wrapper.usage
-        input_tokens += usage.input_tokens
-        output_tokens += usage.output_tokens
-        total_tokens += usage.total_tokens
-        if plan_store.current_request_status() in {"completed", "blocked"}:
-            break
-        continuations += 1
-        print("\n\nPLAN GATE: the request is still active; continuing the agent.")
-        print(plan_store.prompt_snapshot())
-        prompt = (
-            "Continue the active request. The previous response was not final because the "
-            "persistent plan is unfinished. Follow the current plan state, review every tool "
-            "result, and finish only after the goal is achieved. If the request is impossible, "
-            "block the plan with a clear reason before answering."
-        )
+        result = await controller.run(user_input)
+    except Exception as exc:
+        raise SystemExit(f"Agent stopped: {type(exc).__name__}: {exc}") from exc
+
+    print(f"\nAnswer:\n{result.answer}")
     print(
-        "\n\n"
-        f"Token usage:\n"
-        f"\tinput={input_tokens}\n"
-        f"\toutput={output_tokens}\n"
-        f"\ttotal={total_tokens}\n"
-        f"\tcontinuations={continuations}"
+        "\n"
+        "Token usage:\n"
+        f"\tinput={result.input_tokens}\n"
+        f"\toutput={result.output_tokens}\n"
+        f"\ttotal={result.total_tokens}"
     )
