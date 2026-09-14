@@ -2,12 +2,12 @@ from app.input import get_input
 from app.settings import settings
 from app.session import create_session
 from app.project import get_workflow_database_path
-from workflow.controller import WorkflowController
 from workflow.session import SQLiteWorkflowSession
+from workflow.controller import WorkflowController
 
 
-async def run_agent() -> None:
-    user_input = await get_input()
+def run_agent() -> None:
+    user_input = get_input()
     controller = WorkflowController(
         workflow_session=SQLiteWorkflowSession(
             session_id=settings.session_id,
@@ -16,10 +16,9 @@ async def run_agent() -> None:
         conversation_session=create_session(),
     )
     try:
-        result = await controller.run(user_input)
+        result = controller.run(user_input)
     except Exception as exc:
         raise SystemExit(f"Agent stopped: {type(exc).__name__}: {exc}") from exc
-
     print(f"\nAnswer:\n{result.answer}")
     print(
         "\n"

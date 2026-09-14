@@ -17,7 +17,9 @@ def create_planner_agent() -> Agent[None]:
             "answer empty and provide the intended goal, observable success criteria, and the "
             "smallest useful sequence of ordered steps. Each step must produce or verify an "
             "outcome. Do not include thinking, planning, or reporting as separate steps. Use "
-            "the same language as the user's request."
+            "the same language as the user's request. Requests to write, say, translate, "
+            "explain, or generate text are direct unless the user explicitly asks to save, "
+            "create, edit, inspect, or execute something in the project."
         ),
         output_type=PlanningDecision,
     )
