@@ -16,7 +16,6 @@ def create_planner_agent() -> Agent[PlanningContext]:
             parallel_tool_calls=False,
         ),
         instructions=(
-            f"{settings.agent_instructions}\n\n"
             "Decide whether the user's request needs project inspection, file changes, or "
             "command execution. If it does not, call answer_directly. Otherwise call "
             "submit_plan with the intended outcome, observable success criteria, and the "
@@ -47,7 +46,8 @@ def create_executor_agent(state: WorkflowState, step: WorkflowStep) -> Agent[Non
             parallel_tool_calls=False,
         ),
         instructions=(
-            f"{settings.agent_instructions}\n\n"
+            f"{settings.agent_instructions} "
+            "Use the same language as the user's request.\n\n"
             "You are executing exactly one step of an approved workflow. Use the available "
             "tools to complete only current_step. You may call several tools and must inspect "
             "their results, correct failures, and gather observable evidence before finishing. "
