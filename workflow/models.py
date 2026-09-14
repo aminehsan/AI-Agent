@@ -15,6 +15,29 @@ class StepStatus(StrEnum):
     failed = "failed"
 
 
+class PlanningMode(StrEnum):
+    direct = "direct"
+    plan = "plan"
+
+
+class PlanningDecision(BaseModel):
+    mode: PlanningMode = Field(
+        description="Use direct for a conversational answer and plan for project work."
+    )
+    answer: str = Field(
+        description="The final answer in direct mode; otherwise an empty string."
+    )
+    goal: str = Field(
+        description="The intended outcome in plan mode; otherwise an empty string."
+    )
+    success_criteria: list[str] = Field(
+        description="Observable completion criteria in plan mode; otherwise an empty list."
+    )
+    steps: list[str] = Field(
+        description="Small ordered execution steps in plan mode; otherwise an empty list."
+    )
+
+
 class PlanDraft(BaseModel):
     goal: str = Field(min_length=1)
     success_criteria: list[str] = Field(min_length=1)

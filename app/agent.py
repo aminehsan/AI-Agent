@@ -1,29 +1,25 @@
 from json import dumps
 from agents import Agent, ModelSettings
-from .model import create_model
 from .settings import settings
-from workflow.models import WorkflowState, WorkflowStep
-from workflow.planning import PlanningContext, answer_directly, submit_plan
+from .model import create_model
+from workflow.models import PlanningDecision, WorkflowState, WorkflowStep
 from tools.filesystem import edit_file, list_files, read_file, run_command, write_file
 
 
-def create_planner_agent() -> Agent[PlanningContext]:
+def create_planner_agent() -> Agent[None]:
     return Agent(
         name=f"{settings.agent_name} Planner",
         model=create_model(),
-        model_settings=ModelSettings(
-            tool_choice="required",
-            parallel_tool_calls=False,
-        ),
         instructions=(
             "Decide whether the user's request needs project inspection, file changes, or "
-            "command execution. If it does not, call answer_directly. Otherwise call "
-            "submit_plan with the intended outcome, observable success criteria, and the "
+            "command execution. Return mode direct when it does not; put the complete answer "
+            "in answer and leave all plan fields empty. Return mode plan otherwise; leave "
+            "answer empty and provide the intended goal, observable success criteria, and the "
             "smallest useful sequence of ordered steps. Each step must produce or verify an "
-            "outcome. Do not include thinking, planning, or reporting as separate steps."
+            "outcome. Do not include thinking, planning, or reporting as separate steps. Use "
+            "the same language as the user's request."
         ),
-        tool_use_behavior="stop_on_first_tool",
-        tools=[answer_directly, submit_plan],
+        output_type=PlanningDecision,
     )
 
 
