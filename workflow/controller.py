@@ -1,11 +1,11 @@
-import json
-from dataclasses import dataclass
 from typing import Any
+from dataclasses import dataclass
+from json import loads, dumps, JSONDecodeError
 from agents import Runner, SQLiteSession, ToolCallOutputItem
-from app.agent import create_executor_agent, create_planner_agent
-from .models import StepStatus, WorkflowState, WorkflowStatus
 from .planning import PlanningContext
 from .session import SQLiteWorkflowSession
+from .models import StepStatus, WorkflowState, WorkflowStatus
+from app.agent import create_executor_agent, create_planner_agent
 
 
 @dataclass
@@ -31,7 +31,6 @@ class WorkflowController:
         await self.workflow_session.clear()
         planner_input = await self._planner_input(user_input)
         planning_context = PlanningContext()
-
         print("Planning...")
         planning_result = await Runner.run(
             starting_agent=create_planner_agent(),
@@ -41,24 +40,19 @@ class WorkflowController:
         )
         result = WorkflowResult(answer="")
         self._add_usage(result, planning_result)
-
         if planning_context.direct_answer is not None:
             result.answer = planning_context.direct_answer
             await self._remember_exchange(user_input, result.answer)
             return result
-
         if planning_context.plan is None:
             raise RuntimeError("The planner returned neither an answer nor a plan.")
-
         state = WorkflowState.from_draft(user_input, planning_context.plan)
         await self.workflow_session.save(state)
         print(f"Goal: {state.goal}")
-
         for step in state.steps:
             print(f"[{step.number}/{len(state.steps)}] {step.task}")
             step.status = StepStatus.running
             await self.workflow_session.save(state)
-
             try:
                 execution_result = await Runner.run(
                     starting_agent=create_executor_agent(state, step),
@@ -76,10 +70,8 @@ class WorkflowController:
                 )
                 await self._remember_exchange(user_input, result.answer)
                 return result
-
             self._add_usage(result, execution_result)
             evidence = self._successful_tool_outputs(execution_result.new_items)
-
             if not evidence:
                 step.status = StepStatus.failed
                 step.summary = "No successful tool result was produced."
@@ -91,18 +83,14 @@ class WorkflowController:
                 )
                 await self._remember_exchange(user_input, result.answer)
                 return result
-
             step.status = StepStatus.completed
             step.summary = str(execution_result.final_output).strip()
             step.evidence = evidence
             await self.workflow_session.save(state)
             print(f"[{step.number}/{len(state.steps)}] completed")
-
         state.status = WorkflowStatus.completed
         await self.workflow_session.save(state)
-        summaries = "\n".join(
-            f"{step.number}. {step.summary}" for step in state.steps
-        )
+        summaries = "\n".join(f"{step.number}. {step.summary}" for step in state.steps)
         result.answer = f"Goal completed: {state.goal}\n{summaries}"
         await self._remember_exchange(user_input, result.answer)
         return result
@@ -132,11 +120,11 @@ class WorkflowController:
             if not isinstance(item, ToolCallOutputItem):
                 continue
             try:
-                output = json.loads(str(item.output))
-            except (TypeError, json.JSONDecodeError):
+                output = loads(str(item.output))
+            except (TypeError, JSONDecodeError):
                 continue
             if isinstance(output, dict) and output.get("ok") is True:
-                evidence.append(json.dumps(output, ensure_ascii=False)[:2000])
+                evidence.append(dumps(output, ensure_ascii=False)[:2000])
         return evidence
 
     @staticmethod

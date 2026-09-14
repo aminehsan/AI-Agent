@@ -27,6 +27,7 @@ class SQLiteWorkflowSession:
                 )
                 """
             )
+
     async def save(self, state: WorkflowState) -> None:
         def save_sync() -> None:
             with self._connect() as connection:

@@ -1,7 +1,7 @@
-import json
-import subprocess
-from collections.abc import Callable
+from json import dumps
 from pathlib import Path
+from subprocess import run
+from collections.abc import Callable
 from agents import function_tool
 from app.settings import settings
 
@@ -47,12 +47,12 @@ def get_project_files() -> list[str]:
 def _tool_result(tool: str, operation: Callable[[], object]) -> str:
     try:
         output = operation()
-        return json.dumps(
+        return dumps(
             {"ok": True, "tool": tool, "output": output},
             ensure_ascii=False,
         )
     except Exception as exc:
-        return json.dumps(
+        return dumps(
             {
                 "ok": False,
                 "tool": tool,
@@ -119,7 +119,7 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
 def run_command(program: str, arguments: list[str]) -> str:
     """Run one program in the project root without a shell and return its result."""
     try:
-        completed = subprocess.run(
+        completed = run(
             [program, *arguments],
             cwd=settings.project_root,
             capture_output=True,
@@ -129,7 +129,7 @@ def run_command(program: str, arguments: list[str]) -> str:
             timeout=120,
             check=False,
         )
-        return json.dumps(
+        return dumps(
             {
                 "ok": completed.returncode == 0,
                 "tool": "run_command",
@@ -142,7 +142,7 @@ def run_command(program: str, arguments: list[str]) -> str:
             ensure_ascii=False,
         )
     except Exception as exc:
-        return json.dumps(
+        return dumps(
             {
                 "ok": False,
                 "tool": "run_command",
