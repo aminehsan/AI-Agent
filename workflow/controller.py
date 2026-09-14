@@ -1,11 +1,11 @@
 import json
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 from agents import Runner, SQLiteSession, ToolCallOutputItem
 from app.agent import create_executor_agent, create_planner_agent
 from .models import StepStatus, WorkflowState, WorkflowStatus
 from .planning import PlanningContext
-from .session import WorkflowSession
+from .session import SQLiteWorkflowSession
 
 
 @dataclass
@@ -21,20 +21,18 @@ class WorkflowController:
 
     def __init__(
         self,
-        workflow_session: WorkflowSession,
+        workflow_session: SQLiteWorkflowSession,
         conversation_session: SQLiteSession,
-        progress: Callable[[str], None] = print,
     ) -> None:
         self.workflow_session = workflow_session
         self.conversation_session = conversation_session
-        self.progress = progress
 
     async def run(self, user_input: str) -> WorkflowResult:
         await self.workflow_session.clear()
         planner_input = await self._planner_input(user_input)
         planning_context = PlanningContext()
 
-        self.progress("Planning...")
+        print("Planning...")
         planning_result = await Runner.run(
             starting_agent=create_planner_agent(),
             input=planner_input,
@@ -53,17 +51,13 @@ class WorkflowController:
             raise RuntimeError("The planner returned neither an answer nor a plan.")
 
         state = WorkflowState.from_draft(user_input, planning_context.plan)
-        await self.workflow_session.save(state, "plan_created")
-        self.progress(f"Goal: {state.goal}")
+        await self.workflow_session.save(state)
+        print(f"Goal: {state.goal}")
 
         for step in state.steps:
-            self.progress(f"[{step.number}/{len(state.steps)}] {step.task}")
+            print(f"[{step.number}/{len(state.steps)}] {step.task}")
             step.status = StepStatus.running
-            await self.workflow_session.save(
-                state,
-                "step_started",
-                {"step": step.number},
-            )
+            await self.workflow_session.save(state)
 
             try:
                 execution_result = await Runner.run(
@@ -75,11 +69,7 @@ class WorkflowController:
                 step.status = StepStatus.failed
                 step.summary = f"{type(exc).__name__}: {exc}"
                 state.status = WorkflowStatus.blocked
-                await self.workflow_session.save(
-                    state,
-                    "step_failed",
-                    {"step": step.number, "reason": step.summary},
-                )
+                await self.workflow_session.save(state)
                 result.answer = (
                     f"Workflow stopped at step {step.number}: {step.task}\n"
                     f"Reason: {step.summary}"
@@ -94,11 +84,7 @@ class WorkflowController:
                 step.status = StepStatus.failed
                 step.summary = "No successful tool result was produced."
                 state.status = WorkflowStatus.blocked
-                await self.workflow_session.save(
-                    state,
-                    "step_failed",
-                    {"step": step.number, "reason": step.summary},
-                )
+                await self.workflow_session.save(state)
                 result.answer = (
                     f"Workflow stopped at step {step.number}: {step.task}\n"
                     f"Reason: {step.summary}"
@@ -109,15 +95,11 @@ class WorkflowController:
             step.status = StepStatus.completed
             step.summary = str(execution_result.final_output).strip()
             step.evidence = evidence
-            await self.workflow_session.save(
-                state,
-                "step_completed",
-                {"step": step.number, "summary": step.summary},
-            )
-            self.progress(f"[{step.number}/{len(state.steps)}] completed")
+            await self.workflow_session.save(state)
+            print(f"[{step.number}/{len(state.steps)}] completed")
 
         state.status = WorkflowStatus.completed
-        await self.workflow_session.save(state, "workflow_completed")
+        await self.workflow_session.save(state)
         summaries = "\n".join(
             f"{step.number}. {step.summary}" for step in state.steps
         )

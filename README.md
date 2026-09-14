@@ -18,9 +18,8 @@ needs project tools, it creates a small ordered plan containing a goal, success
 criteria, and executable steps. The controller then runs one step at a time and
 passes completed-step summaries and tool evidence to the next step.
 
-The current workflow snapshot and its events are stored in
-`<PROJECT_ROOT>/.agent/workflow.db`. Conversation history remains separate in
-`conversation.db`.
+The current workflow snapshot is stored in `<PROJECT_ROOT>/.agent/workflow.db`.
+Conversation history remains separate in `conversation.db`.
 
 The first version is intentionally linear: it has no dependency graph, plan
 revision, or separate verifier agent. A step advances only after at least one
