@@ -1,6 +1,6 @@
 from json import dumps
 from agents import Agent, ModelSettings
-from .settings import settings
+from settings import settings
 from .model import create_model
 from workflow.models import PlanningDecision, WorkflowState, WorkflowStep
 from tools.filesystem import edit_file, list_files, read_file, run_command, write_file

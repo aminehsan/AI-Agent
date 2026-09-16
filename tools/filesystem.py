@@ -3,7 +3,7 @@ from pathlib import Path
 from subprocess import run
 from collections.abc import Callable
 from agents import function_tool
-from app.settings import settings
+from settings import settings
 
 
 IGNORED_DIRECTORIES = {

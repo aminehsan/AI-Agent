@@ -2,8 +2,7 @@ import json
 import sqlite3
 from typing import Any
 from pathlib import Path
-from .settings import settings
-from .project import get_session_database_path
+from settings import get_session_database_path, settings
 
 
 class ConversationSession:

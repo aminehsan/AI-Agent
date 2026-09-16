@@ -1,7 +1,6 @@
-from app.input import get_input
-from app.settings import settings
-from app.session import create_session
-from app.project import get_workflow_database_path
+from agent.input import get_input
+from agent.session import create_session
+from settings import get_workflow_database_path, settings
 from workflow.session import SQLiteWorkflowSession
 from workflow.controller import WorkflowController
 
