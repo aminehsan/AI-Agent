@@ -1,7 +1,7 @@
 from agents import Agent
 from settings import settings
-from .model import create_model
-from tools.filesystem import edit_file, list_files, read_file, run_command, write_file
+from agent.model import create_model
+from tools.filesystem import edit_file, list_files, read_file, write_file, run_command
 
 
 def create_agent() -> Agent:

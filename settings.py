@@ -12,13 +12,13 @@ from pydantic import (
 
 class Settings(BaseSettings):
     project_state_directory_name: ClassVar[str] = ".agent"
+    session_id: ClassVar[str] = "default"
 
     model_url: AnyHttpUrl | None
     model_key: SecretStr
     model_name: str
     agent_name: str = "Coding Assistant"
     agent_instructions: str = "You are a programming assistant."
-    session_id: str = "default"
     project_root: DirectoryPath
 
     @property
