@@ -1,3 +1,4 @@
+from sys import stdout
 from agent.input import get_input
 from agent.session import create_session
 from settings import get_workflow_database_path, settings
@@ -6,6 +7,8 @@ from workflow.controller import WorkflowController
 
 
 def run_agent() -> None:
+    if hasattr(stdout, "reconfigure"):
+        stdout.reconfigure(encoding="utf-8")
     user_input = get_input()
     controller = WorkflowController(
         workflow_session=SQLiteWorkflowSession(
