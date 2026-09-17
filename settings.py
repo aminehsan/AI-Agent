@@ -44,10 +44,6 @@ class Settings(BaseSettings):
     def conversation_database_path(self) -> Path:
         return self.project_state_directory() / "conversation.db"
 
-    @property
-    def workflow_database_path(self) -> Path:
-        return self.project_state_directory() / "workflow.db"
-
     @field_validator("project_root")
     @classmethod
     def validate_project_root(cls, path: Path) -> Path:
