@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import event
 from sqlalchemy.engine import Engine, URL
 from sqlmodel import Field, Relationship, Session, SQLModel, create_engine, select
-from settings import get_session_database_path, settings
+from settings import settings
 
 
 def _utc_now() -> datetime:
@@ -116,5 +116,5 @@ class ConversationSession:
 def create_session() -> ConversationSession:
     return ConversationSession(
         session_id=settings.session_id,
-        db_path=get_session_database_path(),
+        db_path=settings.conversation_database_path,
     )

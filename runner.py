@@ -1,7 +1,7 @@
 from sys import stdout
 from agent.input import get_input
 from agent.session import create_session
-from settings import get_workflow_database_path, settings
+from settings import settings
 from workflow.session import SQLiteWorkflowSession
 from workflow.controller import WorkflowController
 
@@ -13,7 +13,7 @@ def run_agent() -> None:
     controller = WorkflowController(
         workflow_session=SQLiteWorkflowSession(
             session_id=settings.session_id,
-            db_path=get_workflow_database_path(),
+            db_path=settings.workflow_database_path,
         ),
         conversation_session=create_session(),
     )
