@@ -2,8 +2,8 @@ from agents import Runner
 from agents.run_config import DEFAULT_MAX_TURNS
 from agent.agent import create_agent
 from agent.session import create_session
-from cli_io.input import get_input
-from cli_io.output import set_output
+from cli.input import get_input
+from cli.output import set_output
 
 
 def run_agent():
