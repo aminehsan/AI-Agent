@@ -2,7 +2,7 @@ from sys import stdout
 from agents import RunResult
 
 
-def set_output(result: RunResult) -> None:
+def set_output(result: RunResult):
     if hasattr(stdout, "reconfigure"):
         stdout.reconfigure(encoding="utf-8")
     answer = result.final_output.strip()
