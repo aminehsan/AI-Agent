@@ -2,7 +2,7 @@ from agents import Agent
 from settings import settings
 from agent.model import create_model
 from agent.instructions import get_instructions
-from tools.filesystem import get_project_path
+from tools.path import get_project_path
 
 
 def create_agent() -> Agent:
