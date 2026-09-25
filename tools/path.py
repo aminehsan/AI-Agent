@@ -1,8 +1,7 @@
-from agents import function_tool
+from pathlib import Path
 from settings import settings
 
 
-@function_tool
-def get_project_path() -> str:
+def get_project_path() -> Path:
     """The path of the project you are working on."""
     return settings.project_root

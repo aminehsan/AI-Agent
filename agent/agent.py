@@ -1,9 +1,8 @@
-from agents import Agent, function_tool
+from agents import Agent
 from settings import settings
 from agent.model import create_model
 from agent.instructions import get_instructions
-from tools.file import FileReader
-from tools.path import get_project_path
+from tools.registry import get_tools
 
 
 def create_agent() -> Agent:
@@ -11,5 +10,5 @@ def create_agent() -> Agent:
         name=settings.agent_name,
         instructions=get_instructions,
         model=create_model(),
-        tools=[get_project_path, function_tool(FileReader().read_file)],
+        tools=get_tools(),
     )
