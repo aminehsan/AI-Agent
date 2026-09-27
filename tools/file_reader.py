@@ -59,7 +59,7 @@ class FileReader:
             f"Content:\n{content}"
         )
 
-    def read_file(self, path: str, start_line: int = 1, end_line: int | None = None) -> str:
+    def read(self, path: str, start_line: int = 1, end_line: int | None = None) -> str:
         return self._format_result(
             self._read_text(
                 Path(path),
