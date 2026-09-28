@@ -2,7 +2,7 @@ from pathlib import Path
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ReadResult:
     path: Path
     lines: tuple[str, ...]
@@ -11,7 +11,7 @@ class ReadResult:
 
 class FileReader:
     @staticmethod
-    def _read_text(path: Path, *, start_line: int, end_line: int | None) -> ReadResult:
+    def _read_text(path: Path, start_line: int, end_line: int | None, encoding: str) -> ReadResult:
         if not path.is_absolute():
             raise ValueError("File path must be absolute.")
         if start_line < 1:
@@ -25,45 +25,63 @@ class FileReader:
         if not resolved_path.is_file():
             raise ValueError(f"Path is not a regular file: {resolved_path}")
 
-        try:
-            text = resolved_path.read_text(encoding="utf-8")
-        except UnicodeDecodeError as error:
-            raise ValueError(f"File is not valid UTF-8 text: {resolved_path}") from error
-        if "\x00" in text:
-            raise ValueError(f"File appears to contain binary data: {resolved_path}")
+        selected_lines: list[str] = []
+        with resolved_path.open("r", encoding=encoding, errors="strict", newline="") as file:
+            for line_number, line in enumerate(file, start=1):
+                if line_number < start_line:
+                    continue
+                if end_line is not None and line_number > end_line:
+                    break
+                selected_lines.append(line)
 
-        lines = text.splitlines(keepends=True)
-        if text.endswith(("\n", "\r")):
-            lines.append("")
         return ReadResult(
             path=resolved_path,
-            lines=tuple(lines[start_line - 1 : end_line]),
+            lines=tuple(selected_lines),
             first_line=start_line,
         )
 
     @staticmethod
     def _format_result(result: ReadResult) -> str:
         if not result.lines:
-            return f"Path: {result.path}\nNo content found from line {result.first_line}."
+            return (
+                f"Path: {result.path}\n"
+                f"No content found from line {result.first_line}."
+            )
 
         last_line = result.first_line + len(result.lines) - 1
         width = len(str(last_line))
         content = "".join(
-            f"{number:<{width}}|{line}"
+            f"{number:>{width}}|{line}"
             for number, line
             in enumerate(result.lines, start=result.first_line)
         )
+
         return (
             f"Path: {result.path}\n"
             f"Lines: {result.first_line}-{last_line}\n"
             f"Content:\n{content}"
         )
 
-    def read(self, path: str, start_line: int = 1, end_line: int | None = None) -> str:
+    def read(
+        self,
+        path: str,
+        start_line: int = 1,
+        end_line: int | None = None,
+        encoding: str = "utf-8",
+    ) -> str:
+        """
+        Read UTF-8 text from an absolute file path.
+
+        Args:
+            path: Absolute filesystem path of the text file to inspect.
+            start_line: First line to return, using one-based numbering; defaults to 1.
+            end_line: Last line to return, inclusive; null reads to end of file; defaults to None.
+            encoding: Text encoding used to read the file; defaults to utf-8.
+
+        Returns:
+            The resolved path, selected line range, and line-numbered text.
+        """
+
         return self._format_result(
-            self._read_text(
-                Path(path),
-                start_line=start_line,
-                end_line=end_line,
-            )
+            self._read_text(Path(path), start_line, end_line, encoding)
         )
