@@ -1,5 +1,5 @@
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,9 +42,7 @@ class FileWriter:
     @staticmethod
     def _format_result(result: WriteResult) -> str:
         return (
-            f"Path: {result.path}\n"
-            f"Status: created\n"
-            f"Characters written: {result.characters_written}"
+            f"Path: {result.path}\nStatus: created\nCharacters written: {result.characters_written}"
         )
 
     def write(

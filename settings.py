@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import ClassVar
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from pydantic import (
     AnyHttpUrl,
     DirectoryPath,
@@ -8,6 +8,7 @@ from pydantic import (
     field_validator,
     validate_call,
 )
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):

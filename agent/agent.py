@@ -1,7 +1,8 @@
 from agents import Agent
-from settings import settings
-from agent.model import create_model
+
 from agent.instructions import get_instructions
+from agent.model import create_model
+from settings import settings
 from tools.registry import get_tools
 
 

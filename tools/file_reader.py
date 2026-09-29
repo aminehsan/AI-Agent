@@ -1,5 +1,5 @@
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,24 +43,16 @@ class FileReader:
     @staticmethod
     def _format_result(result: ReadResult) -> str:
         if not result.lines:
-            return (
-                f"Path: {result.path}\n"
-                f"No content found from line {result.first_line}."
-            )
+            return f"Path: {result.path}\nNo content found from line {result.first_line}."
 
         last_line = result.first_line + len(result.lines) - 1
         width = len(str(last_line))
         content = "".join(
             f"{number:>{width}}|{line}"
-            for number, line
-            in enumerate(result.lines, start=result.first_line)
+            for number, line in enumerate(result.lines, start=result.first_line)
         )
 
-        return (
-            f"Path: {result.path}\n"
-            f"Lines: {result.first_line}-{last_line}\n"
-            f"Content:\n{content}"
-        )
+        return f"Path: {result.path}\nLines: {result.first_line}-{last_line}\nContent:\n{content}"
 
     def read(
         self,
@@ -82,6 +74,4 @@ class FileReader:
             The resolved path, selected line range, and line-numbered text.
         """
 
-        return self._format_result(
-            self._read_text(Path(path), start_line, end_line, encoding)
-        )
+        return self._format_result(self._read_text(Path(path), start_line, end_line, encoding))
