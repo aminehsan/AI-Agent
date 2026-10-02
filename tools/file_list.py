@@ -116,9 +116,9 @@ class FileList:
 
         Args:
             path: Absolute filesystem path of the directory to inspect.
-            max_depth: Maximum depth below the root; null applies no limit.
-            include_hidden: Whether to include hidden files and directories.
-            excluded_names: Exact file or directory names to omit at every depth.
+            max_depth: Maximum depth below the root; null applies no limit; defaults to None.
+            include_hidden: Whether to include hidden files and directories; defaults to False.
+            excluded_names: Exact file or directory names to omit at every depth; defaults to None.
 
         Returns:
             The resolved path, formatted tree, and displayed entry counts.
