@@ -1,8 +1,7 @@
-from pathlib import Path
-
 from settings import settings
 
 
-def get_project_path() -> Path:
+def get_project_path() -> str:
     """The path of the project you are working on."""
-    return settings.project_root
+
+    return str(settings.project_root)

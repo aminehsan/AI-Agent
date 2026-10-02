@@ -1,17 +1,15 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.interface import Tool
-
 
 @dataclass(frozen=True, slots=True)
 class Result:
     path: Path
-    lines: tuple
+    lines: tuple[str, ...]
     first_line: int
 
 
-class FileRead(Tool):
+class FileRead:
     @staticmethod
     def _read(path: Path, start_line: int, end_line: int | None, encoding: str) -> Result:
         if not path.is_absolute():
@@ -39,10 +37,11 @@ class FileRead(Tool):
         return Result(resolved_path, tuple(selected_lines), start_line)
 
     @staticmethod
-    def _format(result: Result) -> dict:
+    def _format(result: Result) -> dict[str, str]:
+        path = str(result.path)
         if not result.lines:
             return {
-                "path": result.path,
+                "path": path,
                 "content": f"No content found from line {result.first_line}",
             }
 
@@ -54,18 +53,18 @@ class FileRead(Tool):
         )
 
         return {
-            "path": result.path,
+            "path": path,
             "lines": f"{result.first_line} - {last_line}",
             "content": content,
         }
 
-    def run(
+    def read_file(
         self,
         path: str,
         start_line: int = 1,
         end_line: int | None = None,
         encoding: str = "utf-8",
-    ) -> dict:
+    ) -> dict[str, str]:
         """
         Read text from an absolute file path.
 

@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.interface import Tool
-
 
 @dataclass(frozen=True, slots=True)
 class Result:
@@ -10,7 +8,7 @@ class Result:
     characters: int
 
 
-class FileWrit(Tool):
+class FileWrite:
     @staticmethod
     def _write(path: Path, content: str, encoding: str) -> Result:
         if not path.is_absolute():
@@ -39,15 +37,19 @@ class FileWrit(Tool):
         return Result(resolved_path, characters)
 
     @staticmethod
-    def _format(result: Result) -> dict:
-        return {"path": result.path, "status": "created", "characters": result.characters}
+    def _format(result: Result) -> dict[str, str | int]:
+        return {
+            "path": str(result.path),
+            "status": "created",
+            "characters": result.characters,
+        }
 
-    def run(
+    def write_file(
         self,
         path: str,
         content: str,
         encoding: str = "utf-8",
-    ) -> dict:
+    ) -> dict[str, str | int]:
         """
         Write a new text from an absolute file path.
 
