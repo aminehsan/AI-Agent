@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from tools.interface import Tool
+
 
 @dataclass(frozen=True, slots=True)
 class Result:
@@ -8,7 +10,7 @@ class Result:
     characters_written: int
 
 
-class FileWrit:
+class FileWrit(Tool):
     @staticmethod
     def _write(path: Path, content: str, encoding: str) -> Result:
         if not path.is_absolute():

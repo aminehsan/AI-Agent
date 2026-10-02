@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from tools.interface import Tool
+
 
 @dataclass(frozen=True, slots=True)
 class Result:
@@ -9,7 +11,7 @@ class Result:
     first_line: int
 
 
-class FileRead:
+class FileRead(Tool):
     @staticmethod
     def _read(path: Path, start_line: int, end_line: int | None, encoding: str) -> Result:
         if not path.is_absolute():
