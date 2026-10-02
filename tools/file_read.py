@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from tools.validate import validate_path
+
 
 @dataclass(frozen=True, slots=True)
 class Result:
@@ -22,6 +24,7 @@ class FileRead:
             resolved_path = path.resolve(strict=True)
         except (OSError, RuntimeError) as error:
             raise ValueError(f"Cannot resolve file path: {path}") from error
+        validate_path(resolved_path)
         if not resolved_path.is_file():
             raise ValueError(f"Path is not a regular file: {resolved_path}")
 
@@ -69,7 +72,7 @@ class FileRead:
         Read text from an absolute file path.
 
         Args:
-            path: Absolute filesystem path of the text file to inspect.
+            path: Absolute path of a text file inside the project.
             start_line: First line to return, using one-based numbering; defaults to 1.
             end_line: Last line to return, inclusive; null reads to end of file; defaults to None.
             encoding: Text encoding used to read the file; defaults to utf-8.

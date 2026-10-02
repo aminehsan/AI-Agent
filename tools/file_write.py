@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from tools.validate import validate_path
+
 
 @dataclass(frozen=True, slots=True)
 class Result:
@@ -21,7 +23,7 @@ class FileWrite:
             raise ValueError(f"Parent directory does not exist: {parent}") from error
         except (OSError, RuntimeError) as error:
             raise ValueError(f"Cannot resolve parent directory: {parent}") from error
-
+        validate_path(resolved_parent)
         if not resolved_parent.is_dir():
             raise ValueError(f"Parent path is not a directory: {resolved_parent}")
 
@@ -54,7 +56,7 @@ class FileWrite:
         Write a new text from an absolute file path.
 
         Args:
-            path: Absolute filesystem path of the new text file.
+            path: Absolute path of a new text file inside the project.
             content: Text to write exactly as provided.
             encoding: Text encoding used to write the file; defaults to utf-8.
 

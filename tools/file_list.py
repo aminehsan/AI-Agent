@@ -3,6 +3,8 @@ from os import name as os_name
 from pathlib import Path
 from stat import FILE_ATTRIBUTE_HIDDEN
 
+from tools.validate import validate_path
+
 
 @dataclass(frozen=True, slots=True)
 class Result:
@@ -37,6 +39,7 @@ class FileList:
             resolved_path = path.resolve(strict=True)
         except (OSError, RuntimeError) as error:
             raise ValueError(f"Cannot resolve directory path: {path}") from error
+        validate_path(resolved_path)
         if not resolved_path.is_dir():
             raise ValueError(f"Path is not a directory: {resolved_path}")
 
@@ -115,7 +118,7 @@ class FileList:
         List files and directories as a deterministic tree without following links.
 
         Args:
-            path: Absolute filesystem path of the directory to inspect.
+            path: Absolute path of a directory inside the project.
             max_depth: Maximum depth below the root; null applies no limit; defaults to None.
             include_hidden: Whether to include hidden files and directories; defaults to False.
             excluded_names: Exact file or directory names to omit at every depth; defaults to None.
