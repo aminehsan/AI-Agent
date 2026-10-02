@@ -3,15 +3,15 @@ from pathlib import Path
 
 
 @dataclass(frozen=True, slots=True)
-class ReadResult:
+class Result:
     path: Path
     lines: tuple[str, ...]
     first_line: int
 
 
-class FileReader:
+class FileRead:
     @staticmethod
-    def _read_text(path: Path, start_line: int, end_line: int | None, encoding: str) -> ReadResult:
+    def _read(path: Path, start_line: int, end_line: int | None, encoding: str) -> Result:
         if not path.is_absolute():
             raise ValueError("File path must be absolute.")
         if start_line < 1:
@@ -34,14 +34,14 @@ class FileReader:
                     break
                 selected_lines.append(line)
 
-        return ReadResult(
+        return Result(
             path=resolved_path,
             lines=tuple(selected_lines),
             first_line=start_line,
         )
 
     @staticmethod
-    def _format_result(result: ReadResult) -> str:
+    def _format(result: Result) -> str:
         if not result.lines:
             return f"Path: {result.path}\nNo content found from line {result.first_line}."
 
@@ -54,7 +54,7 @@ class FileReader:
 
         return f"Path: {result.path}\nLines: {result.first_line}-{last_line}\nContent:\n{content}"
 
-    def read(
+    def run(
         self,
         path: str,
         start_line: int = 1,
@@ -74,4 +74,4 @@ class FileReader:
             The resolved path, selected line range, and line-numbered text.
         """
 
-        return self._format_result(self._read_text(Path(path), start_line, end_line, encoding))
+        return self._format(self._read(Path(path), start_line, end_line, encoding))

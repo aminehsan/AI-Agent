@@ -3,14 +3,14 @@ from pathlib import Path
 
 
 @dataclass(frozen=True, slots=True)
-class WriteResult:
+class Result:
     path: Path
     characters_written: int
 
 
-class FileWriter:
+class FileWrit:
     @staticmethod
-    def _write_text(path: Path, content: str, encoding: str) -> WriteResult:
+    def _write(path: Path, content: str, encoding: str) -> Result:
         if not path.is_absolute():
             raise ValueError("File path must be absolute.")
 
@@ -34,18 +34,18 @@ class FileWriter:
         except OSError as error:
             raise ValueError(f"Cannot write file: {resolved_path}") from error
 
-        return WriteResult(
+        return Result(
             path=resolved_path,
             characters_written=characters_written,
         )
 
     @staticmethod
-    def _format_result(result: WriteResult) -> str:
+    def _format(result: Result) -> str:
         return (
             f"Path: {result.path}\nStatus: created\nCharacters written: {result.characters_written}"
         )
 
-    def write(
+    def run(
         self,
         path: str,
         content: str,
@@ -63,4 +63,4 @@ class FileWriter:
             The resolved path, creation status, and number of characters written.
         """
 
-        return self._format_result(self._write_text(Path(path), content, encoding))
+        return self._format(self._write(Path(path), content, encoding))
