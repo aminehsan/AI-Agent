@@ -7,7 +7,7 @@ from tools.interface import Tool
 @dataclass(frozen=True, slots=True)
 class Result:
     path: Path
-    characters_written: int
+    characters: int
 
 
 class FileWrit(Tool):
@@ -30,31 +30,26 @@ class FileWrit(Tool):
         resolved_path = resolved_parent / path.name
         try:
             with resolved_path.open("x", encoding=encoding, newline="") as file:
-                characters_written = file.write(content)
+                characters = file.write(content)
         except FileExistsError as error:
             raise ValueError(f"File already exists: {resolved_path}") from error
         except OSError as error:
             raise ValueError(f"Cannot write file: {resolved_path}") from error
 
-        return Result(
-            path=resolved_path,
-            characters_written=characters_written,
-        )
+        return Result(resolved_path, characters)
 
     @staticmethod
-    def _format(result: Result) -> str:
-        return (
-            f"Path: {result.path}\nStatus: created\nCharacters written: {result.characters_written}"
-        )
+    def _format(result: Result) -> dict:
+        return {"path": result.path, "status": "created", "characters": result.characters}
 
     def run(
         self,
         path: str,
         content: str,
         encoding: str = "utf-8",
-    ) -> str:
+    ) -> dict:
         """
-        Create a new UTF-8 text file.
+        Write a new text from an absolute file path.
 
         Args:
             path: Absolute filesystem path of the new text file.

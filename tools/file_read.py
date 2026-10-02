@@ -7,7 +7,7 @@ from tools.interface import Tool
 @dataclass(frozen=True, slots=True)
 class Result:
     path: Path
-    lines: tuple[str, ...]
+    lines: tuple
     first_line: int
 
 
@@ -36,16 +36,15 @@ class FileRead(Tool):
                     break
                 selected_lines.append(line)
 
-        return Result(
-            path=resolved_path,
-            lines=tuple(selected_lines),
-            first_line=start_line,
-        )
+        return Result(resolved_path, tuple(selected_lines), start_line)
 
     @staticmethod
-    def _format(result: Result) -> str:
+    def _format(result: Result) -> dict:
         if not result.lines:
-            return f"Path: {result.path}\nNo content found from line {result.first_line}."
+            return {
+                "path": result.path,
+                "content": f"No content found from line {result.first_line}",
+            }
 
         last_line = result.first_line + len(result.lines) - 1
         width = len(str(last_line))
@@ -54,7 +53,11 @@ class FileRead(Tool):
             for number, line in enumerate(result.lines, start=result.first_line)
         )
 
-        return f"Path: {result.path}\nLines: {result.first_line}-{last_line}\nContent:\n{content}"
+        return {
+            "path": result.path,
+            "lines": f"{result.first_line} - {last_line}",
+            "content": content,
+        }
 
     def run(
         self,
@@ -62,9 +65,9 @@ class FileRead(Tool):
         start_line: int = 1,
         end_line: int | None = None,
         encoding: str = "utf-8",
-    ) -> str:
+    ) -> dict:
         """
-        Read UTF-8 text from an absolute file path.
+        Read text from an absolute file path.
 
         Args:
             path: Absolute filesystem path of the text file to inspect.
