@@ -4,6 +4,7 @@ from typing import ClassVar
 from pydantic import (
     AnyHttpUrl,
     DirectoryPath,
+    PositiveInt,
     SecretStr,
     field_validator,
     validate_call,
@@ -12,14 +13,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    project_state_directory_name: ClassVar[str] = ".agent"
-    session_id: ClassVar[str] = "default"
+    project_state_name: ClassVar[str] = ".agent"
 
     model_url: AnyHttpUrl | None
     model_key: SecretStr
     model_name: str
-    agent_name: str = "Coding Assistant"
-    agent_instructions: str = "You are a programming assistant."
+    agent_name: str
+    agent_instructions: str
+    agent_session_id: str
+    run_max_turns: PositiveInt | None
     project_root: DirectoryPath
 
     @property
@@ -34,7 +36,7 @@ class Settings(BaseSettings):
 
     @validate_call(validate_return=True)
     def project_state_directory(self) -> DirectoryPath:
-        path = self.project_root / self.project_state_directory_name
+        path = self.project_root / self.project_state_name
         path.mkdir(parents=True, exist_ok=True)
         gitignore = path / ".gitignore"
         if not gitignore.exists():
