@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.validate import validate_path
+from tools.validate import validate_absolute_path, validate_project_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,8 +14,7 @@ class Result:
 class FileRead:
     @staticmethod
     def _read(path: Path, start_line: int, end_line: int | None, encoding: str) -> Result:
-        if not path.is_absolute():
-            raise ValueError("File path must be absolute.")
+        validate_absolute_path(path)
         if start_line < 1:
             raise ValueError("start_line must be greater than or equal to 1.")
         if end_line is not None and end_line < start_line:
@@ -24,7 +23,7 @@ class FileRead:
             resolved_path = path.resolve(strict=True)
         except (OSError, RuntimeError) as error:
             raise ValueError(f"Cannot resolve file path: {path}") from error
-        validate_path(resolved_path)
+        validate_project_path(resolved_path)
         if not resolved_path.is_file():
             raise ValueError(f"Path is not a regular file: {resolved_path}")
 

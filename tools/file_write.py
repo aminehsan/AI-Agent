@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.validate import validate_path
+from tools.validate import validate_absolute_path, validate_project_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,9 +13,7 @@ class Result:
 class FileWrite:
     @staticmethod
     def _write(path: Path, content: str, encoding: str) -> Result:
-        if not path.is_absolute():
-            raise ValueError("File path must be absolute.")
-
+        validate_absolute_path(path)
         parent = path.parent
         try:
             resolved_parent = parent.resolve(strict=True)
@@ -23,7 +21,7 @@ class FileWrite:
             raise ValueError(f"Parent directory does not exist: {parent}") from error
         except (OSError, RuntimeError) as error:
             raise ValueError(f"Cannot resolve parent directory: {parent}") from error
-        validate_path(resolved_parent)
+        validate_project_path(resolved_parent)
         if not resolved_parent.is_dir():
             raise ValueError(f"Parent path is not a directory: {resolved_parent}")
 

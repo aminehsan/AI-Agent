@@ -3,7 +3,7 @@ from os import name as os_name
 from pathlib import Path
 from stat import FILE_ATTRIBUTE_HIDDEN
 
-from tools.validate import validate_path
+from tools.validate import validate_absolute_path, validate_project_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,15 +31,14 @@ class FileList:
         include_hidden: bool,
         excluded_names: list[str] | None,
     ) -> Result:
-        if not path.is_absolute():
-            raise ValueError("Directory path must be absolute.")
+        validate_absolute_path(path)
         if max_depth is not None and max_depth < 1:
             raise ValueError("max_depth must be greater than or equal to 1.")
         try:
             resolved_path = path.resolve(strict=True)
         except (OSError, RuntimeError) as error:
             raise ValueError(f"Cannot resolve directory path: {path}") from error
-        validate_path(resolved_path)
+        validate_project_path(resolved_path)
         if not resolved_path.is_dir():
             raise ValueError(f"Path is not a directory: {resolved_path}")
 
