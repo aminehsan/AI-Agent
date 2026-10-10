@@ -4,7 +4,7 @@ from agent.agent import create_agent
 from agent.session import create_session
 from cli.input import get_input
 from cli.output import set_output
-from settings import settings
+from config import settings
 
 
 def run_agent():

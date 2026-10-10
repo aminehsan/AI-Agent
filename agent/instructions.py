@@ -1,6 +1,6 @@
 from agents import Agent, RunContextWrapper
 
-from settings import settings
+from config import settings
 
 
 def get_instructions(_context: RunContextWrapper, _agent: Agent) -> str:

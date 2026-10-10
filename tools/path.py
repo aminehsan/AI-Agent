@@ -1,4 +1,4 @@
-from settings import settings
+from config import settings
 
 
 def project_path() -> str:
