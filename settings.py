@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().with_name(".env"),
         env_file_encoding="utf-8",
+        env_parse_none_str="None",
         extra="ignore",
     )
 

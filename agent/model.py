@@ -5,8 +5,7 @@ from settings import settings
 
 
 def create_model() -> OpenAIResponsesModel:
-    if settings.model_url:
-        set_tracing_disabled(True)
+    set_tracing_disabled(True)
     return OpenAIResponsesModel(
         model=settings.model_name,
         openai_client=AsyncOpenAI(
