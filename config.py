@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from pydantic import (
     AnyHttpUrl,
@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     model_url: AnyHttpUrl | None
     model_key: SecretStr
     model_name: str
+    model_max_tokens: int | None
+    model_reasoning: Literal["low", "medium", "high"]
+    model_verbosity: Literal["low", "medium", "high"]
+    model_context_compact: int
     agent_name: str
     agent_instructions: str
     agent_session_id: str

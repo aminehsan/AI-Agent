@@ -1,31 +1,80 @@
 from agents import ModelSettings
+from openai.types import Reasoning
+from openai.types.responses.response_create_params import ContextManagement
+
+from config import settings
 
 
 def get_settings() -> ModelSettings:
+
     return ModelSettings(
-        store=False,  # از ذخیره‌شدن Response برای بازیابی بعدی جلوگیری می‌کند
-        # temperature=0.2,  # کنترل تصادفی‌بودن؛ عدد کمتر یعنی پاسخ قابل‌پیش‌بینی‌تر
-        # top_p=0.9,  # جایگزین temperature برای nucleus sampling؛ معمولاً فقط یکی از این دو تنظیم می‌شود
-        # frequency_penalty=0.4,  # کاهش تکرار مکرر کلمات و عبارت‌ها
-        # presence_penalty=0.3,  # تشویق مدل به مطرح‌کردن موضوع‌ها و واژه‌های جدید
-        # tool_choice="auto",  # انتخاب ابزار: auto، required، none یا نام یک ابزار مشخص
-        # parallel_tool_calls=True,  # اجازهٔ فراخوانی هم‌زمان چند ابزار در یک نوبت
-        # truncation="auto",  # کوتاه‌کردن خودکار ورودی هنگام عبور از ظرفیت Context
-        # max_tokens=1500,  # حداکثر تعداد توکن خروجی
-        # reasoning={"effort": "medium"},  # میزان تلاش استدلالی؛ فقط برای مدل‌های پشتیبانی‌شده
-        # verbosity="low",  # میزان جزئیات پاسخ: low، medium یا high
-        # metadata={"project": "ai-agent"},  # برچسب‌هایی که همراه درخواست به Provider ارسال می‌شوند
-        # prompt_cache_retention="24h",  # نگهداری Prompt Cache؛ در API جدید deprecated شده است
-        # include_usage=True,  # افزودن Usage به جریان خروجی؛ مخصوص Chat Completions streaming
-        # response_include=["file_search_call.results"],  # درخواست فیلدهای اضافی از Response
-        # top_logprobs=5,  # برگرداندن احتمال توکن انتخاب‌شده و توکن‌های جایگزین
-        # extra_query={"version": "1"},  # پارامترهای اضافی URL؛ فقط برای Providerهایی که آن را می‌شناسند
-        # extra_body={"custom_option": True},  # فیلدهای اضافی JSON؛ این مقدار صرفاً نمونه است
-        # extra_headers={"X-App": "agent"},  # Headerهای اضافی HTTP
-        # extra_args={"provider_option": "value"},  # آرگومان اختصاصی Provider؛ این مقدار صرفاً نمونه است
-        # retry={"max_retries": 2, "backoff": {"initial_delay": 0.5, "max_delay": 5, "multiplier": 2, "jitter": True}},  # تکرار درخواست در خطاهای موقت شبکه یا Provider
-        # context_management=[{"type": "compaction", "compact_threshold": 200_000}],  # فشرده‌سازی Context مکالمات بسیار طولانی در Providerهای پشتیبانی‌شده
-        # prompt_cache_options={"mode": "implicit", "ttl": "30m", "prewarm": False},  # تنظیم Prompt Cache برای مدل‌های پشتیبانی‌شده
-        # preserve_raw_usage=True,  # نگهداری Usage خام Provider در ModelResponse.raw_usage
-        # timeout=60,  # حداکثر زمان هر تلاش برای فراخوانی مدل، برحسب ثانیه
+        store=False,
+        tool_choice="auto",
+        parallel_tool_calls=False,
+        max_tokens=settings.model_max_tokens,
+        reasoning=Reasoning(effort=settings.model_reasoning, summary="auto", context="auto"),
+        verbosity=settings.model_verbosity,
+        context_management=[
+            ContextManagement(type="compaction", compact_threshold=settings.model_context_compact)
+        ],
+        timeout=60,
     )
+
+
+# def get_settings() -> ModelSettings:
+#     return ModelSettings(
+#         store=False,   از ذخیره‌شدن Response برای بازیابی بعدی جلوگیری می‌کند
+#         0.0 تا 0.2: کدنویسی، ابزارها، پاسخ دقیق و باثبات
+#         0.3 تا 0.5: دستیار عمومی
+#         0.7 تا 1.0: ایده‌پردازی و متن خلاق
+#         temperature=0,   کنترل تصادفی‌بودن؛ عدد کمتر یعنی پاسخ قابل‌پیش‌بینی‌تر
+#         0  →  0.2  →  0.4
+#         عدد بزگتر از تکرار جلوگیری میکند
+#         frequency_penalty=0,   کاهش تکرار مکرر کلمات و عبارت‌ها
+#         کدنویسی و اجرای ابزار	0
+#         دستیار عمومی	0 تا 0.2
+#         ایده‌پردازی	0.3 تا 0.6
+#         presence_penalty=0,   تشویق مدل به مطرح‌کردن موضوع‌ها و واژه‌های جدید
+#         "required" "none"
+#         tool_choice="auto",   "required" "none"   انتخاب ابزار: auto، required، none یا نام یک ابزار مشخص
+#         parallel_tool_calls=False,   اجازهٔ فراخوانی هم‌زمان چند ابزار در یک نوبت
+#         auto قدیمی‌ترین پیام‌ها حذف می‌شوند و اجرا ادامه پیدا می‌کند
+#         "disabled"	چیزی حذف نمی‌شود؛ در Context پر خطای 400 می‌گیرید
+#         None	رفتار به Provider واگذار می‌شود
+#         truncation="disabled",  کوتاه‌کردن خودکار ورودی هنگام عبور از ظرفیت Context
+#         پاسخ خیلی کوتاه	300 تا 500
+#         دستیار عمومی	1000 تا 2000
+#         توضیح و تحلیل کد	2000 تا 4000
+#         تولید فایل یا کد طولانی	4000 تا 8000
+#         مدل reasoning با مسئلهٔ پیچیده	مقدار بالاتر یا None
+#         max_tokens=None,   حداکثر تعداد توکن خروجی
+#         "none"        بدون استدلال اضافه
+#         "minimal"     حداقل استدلال
+#         "low"      سریع و کم‌هزینه
+#         "medium"   متعادل؛ پیشنهاد عمومی
+#         "high"     تحلیل عمیق
+#         "xhigh"    مسائل بسیار پیچیده
+#         "max"      حداکثر استدلال
+#         "auto"     بهترین حالت قابل پشتیبانی مدل
+#         "concise"  خلاصه کوتاه
+#         "detailed" خلاصه مفصل
+#         "auto"           مدل تصمیم می‌گیرد
+#         "current_turn"   فقط reasoning مرحله فعلی
+#         "all_turns"      reasoning مراحل قبلی هم استفاده شود
+#         reasoning={"effort": "medium", "summary": "concise", "context": "all_turns"},  میزان تلاش استدلالی؛ فقط برای مدل‌های پشتیبانی‌شده
+#         verbosity="medium",  میزان جزئیات پاسخ: low، medium یا high
+#         include_usage=True,  افزودن Usage به جریان خروجی؛ مخصوص Chat Completions streaming
+#         web_search_call.results: نتیجه‌های کامل جست‌وجوی وب
+#         web_search_call.action.sources: منابع و لینک‌های استفاده‌شده
+#         file_search_call.results: نتایج جست‌وجو در فایل‌ها
+#         code_interpreter_call.outputs: خروجی اجرای کد، مثل متن یا تصویر
+#         computer_call_output.output.image_url: آدرس تصاویر ابزار کنترل کامپیوتر
+#         message.input_image.image_url: آدرس تصاویر ورودی
+#         message.output_text.logprobs: احتمال توکن‌های خروجی
+#         reasoning.encrypted_content: reasoning رمزگذاری‌شده برای ادامهٔ مکالمه با store=False
+#         response_include=None,   درخواست فیلدهای اضافی از Response
+#         context_management=[ContextManagement(type="compaction", compact_threshold=10_000)],   فشرده‌سازی Context مکالمات بسیار طولانی در Providerهای پشتیبانی‌شده
+#         prompt_cache_options=PromptCacheOptions(mode="implicit", ttl="30m"),   تنظیم Prompt Cache برای مدل‌های پشتیبانی‌شده
+#         preserve_raw_usage=True,   نگهداری Usage خام Provider در ModelResponse.raw_usage
+#         timeout=60,   حداکثر زمان هر تلاش برای فراخوانی مدل، برحسب ثانیه
+#     )
