@@ -1,6 +1,6 @@
 from sys import stdout
 
-from agents import RunResult, ToolCallItem
+from agents import ReasoningItem, RunResult, ToolCallItem
 
 
 def _configure_stdout() -> None:
@@ -31,6 +31,20 @@ def _format_tools(result: RunResult) -> str:
     return f"Tools:\n{tools}"
 
 
+def _format_reasoning(result: RunResult) -> str:
+    summaries = [
+        summary.text.strip()
+        for item in result.new_items
+        if isinstance(item, ReasoningItem)
+        for summary in item.raw_item.summary
+        if summary.text.strip()
+    ]
+    reasoning = "\n".join(
+        f" {number}. {summary}" for number, summary in enumerate(summaries, start=1)
+    )
+    return f"Reasoning:\n{reasoning}"
+
+
 def _format_answer(result: RunResult) -> str:
     answer = result.final_output.strip()
     return f"Answer:\n{answer}"
@@ -41,4 +55,5 @@ def set_output(result: RunResult) -> None:
 
     print(f"\n{_format_usage(result)}")
     print(f"\n{_format_tools(result)}")
+    print(f"\n{_format_reasoning(result)}")
     print(f"\n{_format_answer(result)}")
