@@ -12,7 +12,7 @@ def get_settings() -> ModelSettings:
         tool_choice="auto",
         parallel_tool_calls=False,
         max_tokens=settings.model_max_tokens,
-        reasoning=Reasoning(effort=settings.model_reasoning, summary="auto", context="auto"),
+        reasoning=Reasoning(effort=settings.model_reasoning, summary="auto"),
         verbosity=settings.model_verbosity,
         context_management=[
             ContextManagement(type="compaction", compact_threshold=settings.model_context_compact)
