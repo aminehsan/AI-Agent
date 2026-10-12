@@ -11,8 +11,11 @@ def get_settings() -> ModelSettings:
         store=False,
         tool_choice="auto",
         parallel_tool_calls=False,
+        truncation="auto",
         max_tokens=settings.model_max_tokens,
-        reasoning=Reasoning(effort=settings.model_reasoning, summary="auto"),
+        reasoning=Reasoning(
+            effort=settings.model_reasoning, summary="auto", context="current_turn"
+        ),
         verbosity=settings.model_verbosity,
         context_management=[
             ContextManagement(type="compaction", compact_threshold=settings.model_context_compact)
