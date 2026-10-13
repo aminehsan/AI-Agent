@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     model_key: SecretStr
     model_name: str
     model_max_tokens: int | None
-    model_reasoning: Literal["none", "low", "medium", "high"]
+    model_reasoning: Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
     model_verbosity: Literal["low", "medium", "high"]
     model_context_compact: int
     agent_name: str
