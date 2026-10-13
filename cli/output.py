@@ -32,15 +32,17 @@ def _format_tools(result: RunResult) -> str:
 
 
 def _format_reasoning(result: RunResult) -> str:
-    summaries = [
-        summary.text.strip()
+    reasoning_contents = [
+        reasoning.text.strip()
         for item in result.new_items
         if isinstance(item, ReasoningItem)
-        for summary in item.raw_item.summary
-        if summary.text.strip()
+        for reasoning in (
+            item.raw_item.summary if item.raw_item.summary else item.raw_item.content or []
+        )
+        if reasoning.text.strip()
     ]
     reasoning = "\n".join(
-        f" {number}. {summary}" for number, summary in enumerate(summaries, start=1)
+        f" {number}. {summary}" for number, summary in enumerate(reasoning_contents, start=1)
     )
     return f"Reasoning:\n{reasoning}"
 
