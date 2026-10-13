@@ -26,7 +26,7 @@ def _format_tools(result: RunResult) -> str:
         if isinstance(item, ToolCallItem) and item.tool_name
     ]
     tools = "\n".join(
-        f" {number}. {tool_name}" for number, tool_name in enumerate(tool_names, start=1)
+        f" {number}: {tool_name}" for number, tool_name in enumerate(tool_names, start=1)
     )
     return f"Tools:\n{tools}"
 
@@ -41,8 +41,8 @@ def _format_reasoning(result: RunResult) -> str:
         )
         if reasoning.text.strip()
     ]
-    reasoning = "\n".join(
-        f" {number}. {summary}" for number, summary in enumerate(reasoning_contents, start=1)
+    reasoning = "\n\n".join(
+        f"{number})\n{content}" for number, content in enumerate(reasoning_contents, start=1)
     )
     return f"Reasoning:\n{reasoning}"
 
