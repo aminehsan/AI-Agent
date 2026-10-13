@@ -10,15 +10,14 @@ def get_settings() -> ModelSettings:
     return ModelSettings(
         tool_choice="auto",
         parallel_tool_calls=False,
-        truncation="disabled",
+        truncation="auto",
         max_tokens=settings.model_max_tokens,
         reasoning=Reasoning(
-            effort=settings.model_reasoning, summary="concise", context="all_turns"
+            effort=settings.model_reasoning, summary="concise", context="current_turn"
         ),
         verbosity=settings.model_verbosity,
         store=False,
         context_management=[
             ContextManagement(type="compaction", compact_threshold=settings.model_context_compact)
         ],
-        timeout=60.0,
     )
