@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     agent_instructions: str
     agent_session_id: str
     run_max_turns: PositiveInt | None
+    run_session_limit: int | None
     project_root: DirectoryPath
 
     @property
