@@ -5,7 +5,7 @@ from openai.types.responses.response_create_params import ContextManagement
 from settings import settings
 
 
-def get_settings() -> ModelSettings:
+def get_model_settings() -> ModelSettings:
     return ModelSettings(
         tool_choice="auto",
         parallel_tool_calls=False,
@@ -22,10 +22,11 @@ def get_settings() -> ModelSettings:
     )
 
 
-def get_config() -> RunConfig:
+def get_run_config() -> RunConfig:
     return RunConfig(
         nest_handoff_history=True,
         tracing_disabled=True,
+        call_model_input_filter=None,
         session_settings=SessionSettings(limit=settings.run_session_limit),
         tool_execution=ToolExecutionConfig(max_function_tool_concurrency=1),
         tool_not_found_behavior="return_error_to_model",

@@ -1,4 +1,4 @@
-from runner import run_agent
+from runner import run
 
 if __name__ == "__main__":
-    run_agent()
+    run()
