@@ -1,4 +1,4 @@
-from agents import ModelSettings
+from agents import ModelSettings, RunConfig, SessionSettings, ToolExecutionConfig
 from openai.types import Reasoning
 from openai.types.responses.response_create_params import ContextManagement
 
@@ -6,7 +6,6 @@ from settings import settings
 
 
 def get_settings() -> ModelSettings:
-
     return ModelSettings(
         tool_choice="auto",
         parallel_tool_calls=False,
@@ -20,4 +19,15 @@ def get_settings() -> ModelSettings:
         context_management=[
             ContextManagement(type="compaction", compact_threshold=settings.model_context_compact)
         ],
+    )
+
+
+def get_config() -> RunConfig:
+    return RunConfig(
+        nest_handoff_history=True,
+        tracing_disabled=True,
+        session_settings=SessionSettings(limit=settings.run_session_limit),
+        tool_execution=ToolExecutionConfig(max_function_tool_concurrency=1),
+        tool_not_found_behavior="return_error_to_model",
+        tool_name_collision_policy="error",
     )
