@@ -2,7 +2,7 @@ from agents import ModelSettings
 from openai.types import Reasoning
 from openai.types.responses.response_create_params import ContextManagement
 
-from config import settings
+from settings import settings
 
 
 def get_settings() -> ModelSettings:

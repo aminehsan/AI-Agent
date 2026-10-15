@@ -1,9 +1,9 @@
 from agents import FunctionTool, function_tool
 
-from tools.file_list import FileList
-from tools.file_read import FileRead
-from tools.file_write import FileWrite
-from tools.path import project_path
+from .file_list import FileList
+from .file_read import FileRead
+from .file_write import FileWrite
+from .path import project_path
 
 
 def get_tools() -> list[FunctionTool]:

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.validate import validate_absolute_path, validate_project_path
+from .validate import validate_absolute_path, validate_project_path
 
 
 @dataclass(frozen=True, slots=True)

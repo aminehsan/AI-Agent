@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from config import settings
+from settings import settings
 
 
 def validate_absolute_path(path: Path) -> None:

@@ -1,7 +1,7 @@
 from agents import OpenAIResponsesModel
 from openai import AsyncOpenAI
 
-from config import settings
+from settings import settings
 
 
 def create_model() -> OpenAIResponsesModel:

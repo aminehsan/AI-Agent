@@ -1,10 +1,11 @@
 from agents import Agent
 
-from agent.instructions import get_instructions
-from agent.model import create_model
-from agent.settings import get_settings
-from config import settings
+from settings import settings
 from tools.registry import get_tools
+
+from .config import get_settings
+from .instructions import get_instructions
+from .model import create_model
 
 
 def create_agent() -> Agent:

@@ -3,7 +3,7 @@ from os import name as os_name
 from pathlib import Path
 from stat import FILE_ATTRIBUTE_HIDDEN
 
-from tools.validate import validate_absolute_path, validate_project_path
+from .validate import validate_absolute_path, validate_project_path
 
 
 @dataclass(frozen=True, slots=True)
