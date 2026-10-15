@@ -8,7 +8,7 @@ from config import get_run_config
 from settings import settings
 
 
-def run():
+def run() -> None:
     result = Runner.run_sync(
         starting_agent=create_agent(),
         input=get_input(),

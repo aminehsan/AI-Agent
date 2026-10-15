@@ -44,14 +44,14 @@ class FileCreator:
             "characters": result.characters,
         }
 
-    def create_file(
+    def file_creator(
         self,
         path: str,
         content: str,
         encoding: str = "utf-8",
     ) -> dict[str, str | int]:
         """
-        Write a new text from an absolute file path.
+        Create a new text file at an absolute path.
 
         Args:
             path: Absolute path of a new text file inside the project.

@@ -60,7 +60,7 @@ class FileReader:
             "content": content,
         }
 
-    def read_file(
+    def file_reader(
         self,
         path: str,
         start_line: int = 1,
