@@ -52,9 +52,8 @@ def _format_answer(result: RunResult) -> str:
     return f"Answer:\n{answer}"
 
 
-def set_output(result: RunResult) -> None:
+def show_output(result: RunResult) -> None:
     _configure_stdout()
-
     print(f"\n{_format_usage(result)}")
     print(f"\n{_format_tools(result)}")
     print(f"\n{_format_reasoning(result)}")

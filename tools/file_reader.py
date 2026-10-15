@@ -11,7 +11,7 @@ class Result:
     first_line: int
 
 
-class FileRead:
+class FileReader:
     @staticmethod
     def _read(path: Path, start_line: int, end_line: int | None, encoding: str) -> Result:
         validate_absolute_path(path)

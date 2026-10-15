@@ -1,10 +1,10 @@
 from agents import Runner
 
-from agent.agent import create_agent
-from agent.config import get_run_config
+from agent.factory import create_agent
 from agent.session import create_session
 from cli.input import get_input
-from cli.output import set_output
+from cli.output import show_output
+from config import get_run_config
 from settings import settings
 
 
@@ -16,4 +16,4 @@ def run():
         run_config=get_run_config(),
         session=create_session(),
     )
-    set_output(result)
+    show_output(result)

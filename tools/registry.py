@@ -1,15 +1,15 @@
 from agents import FunctionTool, function_tool
 
-from .file_list import FileList
-from .file_read import FileRead
-from .file_write import FileWrite
-from .path import project_path
+from .file_creator import FileCreator
+from .file_reader import FileReader
+from .files_list import FilesList
+from .project_path import project_path
 
 
 def get_tools() -> list[FunctionTool]:
     return [
-        function_tool(FileList().show_files_and_directories),
-        function_tool(FileRead().read_file),
-        function_tool(FileWrite().write_file),
+        function_tool(FilesList().show_files),
+        function_tool(FileReader().read_file),
+        function_tool(FileCreator().create_file),
         function_tool(project_path),
     ]

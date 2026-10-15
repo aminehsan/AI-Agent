@@ -1,10 +1,10 @@
 from agents import Agent
 
-from model.model import create_model
+from config import get_model_settings
+from model.provider import create_model
 from settings import settings
 from tools.registry import get_tools
 
-from .config import get_model_settings
 from .instructions import get_instructions
 
 

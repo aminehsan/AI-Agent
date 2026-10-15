@@ -10,7 +10,7 @@ class Result:
     characters: int
 
 
-class FileWrite:
+class FileCreator:
     @staticmethod
     def _write(path: Path, content: str, encoding: str) -> Result:
         validate_absolute_path(path)
@@ -44,7 +44,7 @@ class FileWrite:
             "characters": result.characters,
         }
 
-    def write_file(
+    def create_file(
         self,
         path: str,
         content: str,

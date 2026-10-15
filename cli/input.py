@@ -15,6 +15,5 @@ def _format_prompt() -> str:
 
 def get_input() -> str:
     _configure_stdin()
-
     _input = _format_prompt()
     return _input

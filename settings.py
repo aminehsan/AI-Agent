@@ -18,15 +18,18 @@ class Settings(BaseSettings):
     model_url: AnyHttpUrl | None
     model_key: SecretStr
     model_name: str
-    model_max_tokens: int | None
+    model_max_tokens: PositiveInt | None
     model_reasoning: Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
     model_verbosity: Literal["low", "medium", "high"]
-    model_context_compact: int
+    model_context_compact: PositiveInt
+
     agent_name: str
     agent_instructions: str
     agent_session_id: str
+
     run_max_turns: PositiveInt | None
-    run_session_limit: int | None
+    run_session_limit: PositiveInt | None
+
     project_root: DirectoryPath
 
     @property

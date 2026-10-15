@@ -15,7 +15,7 @@ class Result:
     file_count: int
 
 
-class FileList:
+class FilesList:
     @staticmethod
     def _is_hidden(path: Path) -> bool:
         if path.name.startswith("."):
@@ -53,7 +53,8 @@ class FileList:
             entries = [
                 entry
                 for entry in directory.iterdir()
-                if entry.name not in excluded and (include_hidden or not FileList._is_hidden(entry))
+                if entry.name not in excluded
+                and (include_hidden or not FilesList._is_hidden(entry))
             ]
             entries.sort(
                 key=lambda entry: (
@@ -106,7 +107,7 @@ class FileList:
             "tree": "\n".join(result.lines),
         }
 
-    def show_files_and_directories(
+    def show_files(
         self,
         path: str,
         max_depth: int | None = None,
