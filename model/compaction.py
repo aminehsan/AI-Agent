@@ -1,5 +1,5 @@
 from agents import TResponseInputItem
 
 
-def compaction_input(input_item: list[TResponseInputItem]) -> list[TResponseInputItem]:
-    return input_item[-20:]
+def compact_input(input_item: list[TResponseInputItem]) -> list[TResponseInputItem]:
+    return input_item
