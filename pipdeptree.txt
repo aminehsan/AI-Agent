@@ -74,7 +74,7 @@ openai-agents==0.24.0
     - uvicorn [required: >=0.31.1, installed: 0.54.0]
       - click [required: >=7.0, installed: 8.5.0]
       - h11 [required: >=0.8, installed: 0.16.0]
-  - openai [required: >=3.0.0,<4, installed: 3.31.0]
+  - openai [required: >=3.0.0,<4, installed: 3.33.0]
     - anyio [required: >=4.10.0,<5, installed: 4.15.1]
       - idna [required: >=2.8, installed: 3.20]
       - typing_extensions [required: >=4.16.0, installed: 4.16.0]
@@ -119,7 +119,7 @@ openai-agents==0.24.0
   - urllib3 [required: >=2.8.0, installed: 2.8.0]
   - websockets [required: >=15.0,<17, installed: 16.1.1]
 pip==26.2.1
-pipdeptree==4.2.7
+pipdeptree==4.2.8
   - nab [required: >=0.0.19, installed: 0.0.21]
     - nab-index [required: ==0.0.21, installed: 0.0.21]
       - nab-provider [required: ==0.0.21, installed: 0.0.21]
