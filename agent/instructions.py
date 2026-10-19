@@ -6,7 +6,6 @@ from settings import settings
 def get_compaction_instructions(_context: RunContextWrapper, _agent: Agent) -> str:
     return """
 Compact all provided input items into a concise context for another agent.
-Preserve the user's goal, constraints, important facts, file paths, tool calls and results, errors, and unfinished work.
 Do not add information. Return only the compacted context in the same language as the input.
 """
 

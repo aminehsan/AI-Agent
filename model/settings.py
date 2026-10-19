@@ -11,10 +11,10 @@ def get_compaction_model_settings() -> ModelSettings:
         parallel_tool_calls=False,
         truncation="auto",
         max_tokens=None,
-        reasoning=Reasoning(effort="medium", summary="concise", context="current_turn"),
-        verbosity="medium",
+        reasoning=Reasoning(effort="high", summary="concise", context="current_turn"),
+        verbosity="high",
         store=False,
-        context_management=[ContextManagement(type="compaction", compact_threshold=4096)],
+        context_management=[ContextManagement(type="compaction")],
     )
 
 
