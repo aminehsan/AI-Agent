@@ -1,4 +1,5 @@
 from agents import TResponseInputItem
+from openai.types.responses import EasyInputMessageParam
 
 from agent.runner import run_compaction
 
@@ -26,5 +27,5 @@ from agent.runner import run_compaction
 async def compact_inputs(input_items: list[TResponseInputItem]) -> list[TResponseInputItem]:
     compacted_items: list[TResponseInputItem] = []
     result = await run_compaction(input_items.copy())
-    compacted_items.append({"role": "user", "content": result.final_output.strip()})
+    compacted_items.append(EasyInputMessageParam(role="user", content=result.final_output.strip()))
     return compacted_items
