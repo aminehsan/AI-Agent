@@ -1,10 +1,11 @@
 from agents.run import CallModelData, ModelInputData
 
-from .compaction import compact_input
+from .compaction import compact_inputs
 
 
-def filter_input(data: CallModelData) -> ModelInputData:
+async def filter_input(data: CallModelData) -> ModelInputData:
+    compacted_inputs = await compact_inputs(data.model_data.input)
     return ModelInputData(
-        input=compact_input(data.model_data.input),
+        input=compacted_inputs,
         instructions=data.model_data.instructions,
     )
