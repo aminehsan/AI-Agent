@@ -1,3 +1,5 @@
+from copy import copy
+
 from agents import TResponseInputItem
 from openai.types.responses import EasyInputMessageParam
 
@@ -8,14 +10,14 @@ from agent.runner import run_compaction
 #         return None
 #
 #     if item.get("type") == "function_call_output":
-#         compacted = item.copy()
+#         compacted = copy(item)
 #         compacted["output"] = "summarized output"
 #         return compacted
 #
 #     return item
 #
 #
-# def _compact_inputs(input_items: list[TResponseInputItem]) -> list[TResponseInputItem]:
+# def compact_inputs(input_items: list[TResponseInputItem]) -> list[TResponseInputItem]:
 #     compacted_items: list[TResponseInputItem] = []
 #     for item in input_items:
 #         compacted_item = _compact_item(item)
@@ -25,7 +27,6 @@ from agent.runner import run_compaction
 
 
 async def compact_inputs(input_items: list[TResponseInputItem]) -> list[TResponseInputItem]:
-    compacted_items: list[TResponseInputItem] = []
-    result = await run_compaction(input_items.copy())
-    compacted_items.append(EasyInputMessageParam(role="user", content=result.final_output.strip()))
+    compacted = await run_compaction(copy(input_items))
+    compacted_items = [EasyInputMessageParam(role="user", content=compacted.final_output.strip())]
     return compacted_items
