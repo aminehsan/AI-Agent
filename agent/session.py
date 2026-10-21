@@ -17,5 +17,4 @@ def create_compaction_session() -> OpenAIResponsesCompactionSession:
         underlying_session=create_session(),
         client=create_client(),
         model=settings.model_name,
-        should_trigger_compaction=lambda _: True,
     )
