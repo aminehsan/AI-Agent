@@ -1,18 +1,14 @@
-from copy import deepcopy
-
 from agents import TResponseInputItem
 from agents.run import CallModelData, ModelInputData
 
 
 def _filter_item(item: TResponseInputItem) -> TResponseInputItem | None:
-    if item.get("type") == "reasoning":
-        return None
-
-    if item.get("type") == "function_call_output":
-        copy_item = deepcopy(item)
-        copy_item["output"] = "filtered output"
-        return copy_item
-
+    # if item.get("type") == "reasoning":
+    #     return None
+    # if item.get("type") == "function_call_output":
+    #     copy_item = deepcopy(item)
+    #     copy_item["output"] = "filtered output"
+    #     return copy_item
     return item
 
 
