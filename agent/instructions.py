@@ -13,6 +13,7 @@ Use the available tools.
 
 def get_summarizer_instructions(_context: RunContextWrapper, _agent: Agent) -> str:
     return """
-Summarize all provided input.
-Do not add information. Return only the summarized text in the same language as the input.
+Summarize the provided conversation history for another model that will continue the work.
+Preserve the user's goal, decisions, constraints, important file paths, tool results, errors, and unfinished work. Do not add information.
+Return only the summary in the same language as the input.
 """
