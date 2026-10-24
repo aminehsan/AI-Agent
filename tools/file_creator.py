@@ -15,12 +15,7 @@ class FileCreator:
     def _write(path: Path, content: str, encoding: str) -> Result:
         validate_absolute_path(path)
         parent = path.parent
-        try:
-            resolved_parent = parent.resolve(strict=True)
-        except FileNotFoundError as error:
-            raise ValueError(f"Parent directory does not exist: {parent}") from error
-        except (OSError, RuntimeError) as error:
-            raise ValueError(f"Cannot resolve parent directory: {parent}") from error
+        resolved_parent = parent.resolve(strict=True)
         validate_project_path(resolved_parent)
         if not resolved_parent.is_dir():
             raise ValueError(f"Parent path is not a directory: {resolved_parent}")
@@ -31,12 +26,10 @@ class FileCreator:
             with resolved_path.open("x", encoding=encoding, newline="") as file:
                 created = True
                 characters = file.write(content)
-        except FileExistsError as error:
-            raise ValueError(f"File already exists: {resolved_path}") from error
-        except (OSError, UnicodeError, LookupError) as error:
+        except Exception:
             if created:
                 resolved_path.unlink(missing_ok=True)
-            raise ValueError(f"Cannot write file: {resolved_path}") from error
+            raise
 
         return Result(resolved_path, characters)
 

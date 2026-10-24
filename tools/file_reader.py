@@ -19,10 +19,7 @@ class FileReader:
             raise ValueError("start_line must be greater than or equal to 1.")
         if end_line is not None and end_line < start_line:
             raise ValueError("end_line must be greater than or equal to start_line.")
-        try:
-            resolved_path = path.resolve(strict=True)
-        except (OSError, RuntimeError) as error:
-            raise ValueError(f"Cannot resolve file path: {path}") from error
+        resolved_path = path.resolve(strict=True)
         validate_project_path(resolved_path)
         if not resolved_path.is_file():
             raise ValueError(f"Path is not a regular file: {resolved_path}")
