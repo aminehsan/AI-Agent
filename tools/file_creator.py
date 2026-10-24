@@ -26,12 +26,16 @@ class FileCreator:
             raise ValueError(f"Parent path is not a directory: {resolved_parent}")
 
         resolved_path = resolved_parent / path.name
+        created = False
         try:
             with resolved_path.open("x", encoding=encoding, newline="") as file:
+                created = True
                 characters = file.write(content)
         except FileExistsError as error:
             raise ValueError(f"File already exists: {resolved_path}") from error
-        except OSError as error:
+        except (OSError, UnicodeError, LookupError) as error:
+            if created:
+                resolved_path.unlink(missing_ok=True)
             raise ValueError(f"Cannot write file: {resolved_path}") from error
 
         return Result(resolved_path, characters)
