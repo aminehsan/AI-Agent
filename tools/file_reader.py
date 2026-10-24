@@ -39,13 +39,10 @@ class FileReader:
         return Result(resolved_path, tuple(selected_lines), start_line)
 
     @staticmethod
-    def _format(result: Result) -> dict[str, str]:
+    def _format(result: Result) -> str:
         path = str(result.path)
         if not result.lines:
-            return {
-                "path": path,
-                "content": f"No content found from line {result.first_line}",
-            }
+            return f"Path: {path}\nContent: No content found from line {result.first_line}"
 
         last_line = result.first_line + len(result.lines) - 1
         width = len(str(last_line))
@@ -54,11 +51,7 @@ class FileReader:
             for number, line in enumerate(result.lines, start=result.first_line)
         )
 
-        return {
-            "path": path,
-            "lines": f"{result.first_line} - {last_line}",
-            "content": content,
-        }
+        return f"Path: {path}\nLines: {result.first_line} - {last_line}\nContent:\n{content}"
 
     def file_reader(
         self,
@@ -66,7 +59,7 @@ class FileReader:
         start_line: int = 1,
         end_line: int | None = None,
         encoding: str = "utf-8",
-    ) -> dict[str, str]:
+    ) -> str:
         """
         Read text from an absolute file path.
 

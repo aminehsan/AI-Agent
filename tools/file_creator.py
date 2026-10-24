@@ -37,19 +37,15 @@ class FileCreator:
         return Result(resolved_path, characters)
 
     @staticmethod
-    def _format(result: Result) -> dict[str, str | int]:
-        return {
-            "path": str(result.path),
-            "status": "created",
-            "characters": result.characters,
-        }
+    def _format(result: Result) -> str:
+        return f"Path: {result.path}\nStatus: created\nCharacters: {result.characters}"
 
     def file_creator(
         self,
         path: str,
         content: str,
         encoding: str = "utf-8",
-    ) -> dict[str, str | int]:
+    ) -> str:
         """
         Create a new text file at an absolute path.
 

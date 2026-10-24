@@ -97,14 +97,15 @@ class FileTree:
         )
 
     @staticmethod
-    def _format(result: Result) -> dict[str, str | int]:
-        return {
-            "path": str(result.path),
-            "links": result.link_count,
-            "directories": result.directory_count,
-            "files": result.file_count,
-            "tree": "\n".join(result.lines),
-        }
+    def _format(result: Result) -> str:
+        tree = "\n".join(result.lines)
+        return (
+            f"Path: {result.path}\n"
+            f"Links: {result.link_count}\n"
+            f"Directories: {result.directory_count}\n"
+            f"Files: {result.file_count}\n"
+            f"Tree:\n{tree}"
+        )
 
     def file_tree(
         self,
@@ -112,7 +113,7 @@ class FileTree:
         max_depth: int | None = None,
         include_hidden: bool = False,
         excluded_names: list[str] | None = None,
-    ) -> dict[str, str | int]:
+    ) -> str:
         """
         List files and directories as a deterministic tree without following links.
 
