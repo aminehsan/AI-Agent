@@ -52,7 +52,7 @@ def _format_final_answer(run_result: RunResult) -> str:
     return f"Answer:\n{final_answer}"
 
 
-def print_run_result(run_result: RunResult) -> None:
+def show_run_result(run_result: RunResult) -> None:
     _configure_stdout()
     print(f"\n{_format_usage(run_result)}")
     print(f"\n{_format_tool_calls(run_result)}")

@@ -4,9 +4,7 @@ from agents.run import CallModelData, ModelInputData
 from .compaction import compact_input_items
 
 
-async def _filter_input_items(
-    input_items: list[TResponseInputItem],
-) -> list[TResponseInputItem]:
+async def _filter_input_items(input_items: list[TResponseInputItem]) -> list[TResponseInputItem]:
     return await compact_input_items(input_items)
 
 
