@@ -5,15 +5,20 @@ from .validate import validate_absolute_path, validate_project_path
 
 
 @dataclass(frozen=True, slots=True)
-class Result:
+class FileReadResult:
     path: Path
-    lines: tuple[str, ...]
-    first_line: int
+    content_lines: tuple[str, ...]
+    first_line_number: int
 
 
 class FileReader:
     @staticmethod
-    def _read(path: Path, start_line: int, end_line: int | None, encoding: str) -> Result:
+    def _read(
+        path: Path,
+        start_line: int,
+        end_line: int | None,
+        encoding: str,
+    ) -> FileReadResult:
         validate_absolute_path(path)
         if start_line < 1:
             raise ValueError("start_line must be greater than or equal to 1.")
@@ -33,24 +38,31 @@ class FileReader:
                     break
                 selected_lines.append(line)
 
-        return Result(resolved_path, tuple(selected_lines), start_line)
+        return FileReadResult(resolved_path, tuple(selected_lines), start_line)
 
     @staticmethod
-    def _format(result: Result) -> str:
+    def _format_result(result: FileReadResult) -> str:
         path = str(result.path)
-        if not result.lines:
-            return f"Path: {path}\nContent: No content found from line {result.first_line}"
+        if not result.content_lines:
+            return f"Path: {path}\nContent: No content found from line {result.first_line_number}"
 
-        last_line = result.first_line + len(result.lines) - 1
-        width = len(str(last_line))
+        last_line_number = result.first_line_number + len(result.content_lines) - 1
+        line_number_width = len(str(last_line_number))
         content = "".join(
-            f"{number:>{width}}|{line}"
-            for number, line in enumerate(result.lines, start=result.first_line)
+            f"{line_number:>{line_number_width}}|{line}"
+            for line_number, line in enumerate(
+                result.content_lines,
+                start=result.first_line_number,
+            )
         )
 
-        return f"Path: {path}\nLines: {result.first_line} - {last_line}\nContent:\n{content}"
+        return (
+            f"Path: {path}\n"
+            f"Lines: {result.first_line_number} - {last_line_number}\n"
+            f"Content:\n{content}"
+        )
 
-    def file_reader(
+    def read_file(
         self,
         path: str,
         start_line: int = 1,
@@ -70,4 +82,4 @@ class FileReader:
             The resolved path, selected line range, and line-numbered text.
         """
 
-        return self._format(self._read(Path(path), start_line, end_line, encoding))
+        return self._format_result(self._read(Path(path), start_line, end_line, encoding))

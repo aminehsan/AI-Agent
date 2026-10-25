@@ -13,47 +13,37 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    project_state_name: ClassVar[str] = ".agent"
+    PROJECT_STATE_DIRECTORY_NAME: ClassVar[str] = ".agent"
 
-    model_url: AnyHttpUrl | None
-    model_key: SecretStr
+    model_base_url: AnyHttpUrl | None
+    model_api_key: SecretStr
     model_name: str
-    model_max_tokens: PositiveInt | None
-    model_reasoning: Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+    model_max_output_tokens: PositiveInt | None
+    model_reasoning_effort: Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
     model_verbosity: Literal["low", "medium", "high"]
-    model_context_compact: PositiveInt
+    model_compaction_threshold: PositiveInt
 
     agent_name: str
     agent_instructions: str
-    agent_session_id: str
+    conversation_id: str
 
-    run_max_turns: PositiveInt | None
-    run_session_limit: PositiveInt | None
+    agent_max_turns: PositiveInt | None
+    session_history_limit: PositiveInt | None
 
     project_root: DirectoryPath
 
-    @property
-    def model_base_url(self) -> str | None:
-        if self.model_url is None:
-            return None
-        return str(self.model_url)
-
-    @property
-    def model_api_key(self) -> str:
-        return self.model_key.get_secret_value()
-
     @validate_call(validate_return=True)
-    def project_state_directory(self) -> DirectoryPath:
-        path = self.project_root / self.project_state_name
-        path.mkdir(parents=True, exist_ok=True)
-        gitignore = path / ".gitignore"
+    def ensure_project_state_directory(self) -> DirectoryPath:
+        state_directory = self.project_root / self.PROJECT_STATE_DIRECTORY_NAME
+        state_directory.mkdir(parents=True, exist_ok=True)
+        gitignore = state_directory / ".gitignore"
         if not gitignore.exists():
             gitignore.write_text("*\n", encoding="utf-8")
-        return path
+        return state_directory
 
     @property
     def conversation_database_path(self) -> Path:
-        return self.project_state_directory() / "conversation.db"
+        return self.ensure_project_state_directory() / "conversation.db"
 
     @field_validator("project_root")
     @classmethod

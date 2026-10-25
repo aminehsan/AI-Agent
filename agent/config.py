@@ -1,5 +1,5 @@
 from agents import RunConfig
 
 
-def get_run_summarizer_config() -> RunConfig:
+def create_summarizer_run_config() -> RunConfig:
     return RunConfig(tracing_disabled=True)

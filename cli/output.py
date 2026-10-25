@@ -8,8 +8,8 @@ def _configure_stdout() -> None:
         stdout.reconfigure(encoding="utf-8")
 
 
-def _format_usage(result: RunResult) -> str:
-    usage = result.context_wrapper.usage
+def _format_usage(run_result: RunResult) -> str:
+    usage = run_result.context_wrapper.usage
     return (
         "Usage:\n"
         f" requests={usage.requests}\n"
@@ -19,42 +19,42 @@ def _format_usage(result: RunResult) -> str:
     )
 
 
-def _format_tools(result: RunResult) -> str:
+def _format_tool_calls(run_result: RunResult) -> str:
     tool_names = [
         item.tool_name
-        for item in result.new_items
+        for item in run_result.new_items
         if isinstance(item, ToolCallItem) and item.tool_name
     ]
-    tools = "\n".join(
+    formatted_tool_names = "\n".join(
         f" {number}: {tool_name}" for number, tool_name in enumerate(tool_names, start=1)
     )
-    return f"Tools:\n{tools}"
+    return f"Tools:\n{formatted_tool_names}"
 
 
-def _format_reasoning(result: RunResult) -> str:
-    reasoning_contents = [
+def _format_reasoning_summaries(run_result: RunResult) -> str:
+    reasoning_summaries = [
         reasoning.text.strip()
-        for item in result.new_items
+        for item in run_result.new_items
         if isinstance(item, ReasoningItem)
         for reasoning in (
             item.raw_item.summary if item.raw_item.summary else item.raw_item.content or []
         )
         if reasoning.text.strip()
     ]
-    reasoning = "\n\n".join(
-        f"{number})\n{content}" for number, content in enumerate(reasoning_contents, start=1)
+    formatted_summaries = "\n\n".join(
+        f"{number})\n{summary}" for number, summary in enumerate(reasoning_summaries, start=1)
     )
-    return f"Reasoning:\n{reasoning}"
+    return f"Reasoning:\n{formatted_summaries}"
 
 
-def _format_answer(result: RunResult) -> str:
-    answer = result.final_output.strip()
-    return f"Answer:\n{answer}"
+def _format_final_answer(run_result: RunResult) -> str:
+    final_answer = run_result.final_output.strip()
+    return f"Answer:\n{final_answer}"
 
 
-def show_output(result: RunResult) -> None:
+def print_run_result(run_result: RunResult) -> None:
     _configure_stdout()
-    print(f"\n{_format_usage(result)}")
-    print(f"\n{_format_tools(result)}")
-    print(f"\n{_format_reasoning(result)}")
-    print(f"\n{_format_answer(result)}")
+    print(f"\n{_format_usage(run_result)}")
+    print(f"\n{_format_tool_calls(run_result)}")
+    print(f"\n{_format_reasoning_summaries(run_result)}")
+    print(f"\n{_format_final_answer(run_result)}")

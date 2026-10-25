@@ -6,13 +6,15 @@ def _configure_stdin() -> None:
         stdin.reconfigure(encoding="utf-8")
 
 
-def _format_prompt() -> str:
-    prompt = input("\nTask: ").strip()
+def _read_prompt() -> str:
+    # prompt = input("\nTask: ").strip()
+    # prompt = "یک پروژه کامل پایتونی برام بساز که درخواست کاربر را در گوگل سرچ کند ونتایج سرچ را در دیتابی ذخیره کن. به صورت ریکوئست به خود سایت گوگل باشد نه api سفارشی گوگل"
+    prompt = "ادامه بده"
     if not prompt:
         raise SystemExit("Task cannot be empty.")
     return prompt
 
 
-def get_input() -> str:
+def read_user_input() -> str:
     _configure_stdin()
-    return _format_prompt()
+    return _read_prompt()

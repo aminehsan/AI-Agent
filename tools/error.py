@@ -1,7 +1,10 @@
 from agents import ToolErrorFormatterArgs
 
 
-def error_formatter(args: ToolErrorFormatterArgs) -> str:
-    if args.error is not None:
-        return f"Tool '{args.tool_name}' failed with {type(args.error).__name__}: {args.error}"
-    return args.default_message
+def format_tool_error(error_context: ToolErrorFormatterArgs) -> str:
+    if error_context.error is not None:
+        return (
+            f"Tool '{error_context.tool_name}' failed with "
+            f"{type(error_context.error).__name__}: {error_context.error}"
+        )
+    return error_context.default_message

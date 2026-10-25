@@ -6,34 +6,37 @@ from openai.types.responses import EasyInputMessageParam
 from agent.runner import run_summarizer
 
 
-def _str_input(input: list[TResponseInputItem]) -> str:
-    return dumps(input, ensure_ascii=False, separators=(",", ":"), default=str)
+def _serialize_input_items(input_items: list[TResponseInputItem]) -> str:
+    return dumps(input_items, ensure_ascii=False, separators=(",", ":"), default=str)
 
 
-def _estimate_input_tokens(input: list[TResponseInputItem]) -> int:
-    return len(_str_input(input).encode("utf-8")) // 4
+def _estimate_input_tokens(input_items: list[TResponseInputItem]) -> int:
+    return len(_serialize_input_items(input_items).encode("utf-8")) // 4
 
 
-def _current_turn_start(input: list[TResponseInputItem]) -> int:
-    for index in range(len(input) - 1, -1, -1):
-        if input[index].get("phase") == "final_answer":
+def _find_current_turn_start_index(input_items: list[TResponseInputItem]) -> int:
+    for index in range(len(input_items) - 1, -1, -1):
+        if input_items[index].get("phase") == "final_answer":
             return index + 1
     return 1
 
 
-async def compact_input(input: list[TResponseInputItem]) -> list[TResponseInputItem]:
-    if _estimate_input_tokens(input) < 1:
-        return input
-    current_turn_start = _current_turn_start(input)
-    if current_turn_start == 1:
-        return input
-    old_history = input[:current_turn_start]
-    current_turn = input[current_turn_start:]
-    summary = await run_summarizer(old_history)
-    summary_item = EasyInputMessageParam(
-        content=f"Previous conversation summary (context, not a new request):\n{summary.final_output.strip()}",
+async def compact_input_items(input_items: list[TResponseInputItem]) -> list[TResponseInputItem]:
+    if _estimate_input_tokens(input_items) < 1:
+        return input_items
+    current_turn_start_index = _find_current_turn_start_index(input_items)
+    if current_turn_start_index == 1:
+        return input_items
+    previous_turn_items = input_items[:current_turn_start_index]
+    current_turn_items = input_items[current_turn_start_index:]
+    summarizer_result = await run_summarizer(previous_turn_items)
+    summary_message = EasyInputMessageParam(
+        content=(
+            "Previous conversation summary (context, not a new request):\n"
+            f"{summarizer_result.final_output.strip()}"
+        ),
         role="assistant",
         phase="final_answer",
         type="message",
     )
-    return [summary_item, *current_turn]
+    return [summary_message, *current_turn_items]

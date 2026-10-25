@@ -7,9 +7,9 @@ from .validate import validate_absolute_path, validate_project_path
 
 
 @dataclass(frozen=True, slots=True)
-class Result:
+class FileTreeResult:
     path: Path
-    lines: tuple[str, ...]
+    tree_lines: tuple[str, ...]
     link_count: int
     directory_count: int
     file_count: int
@@ -30,7 +30,7 @@ class FileTree:
         max_depth: int | None,
         include_hidden: bool,
         excluded_names: list[str] | None,
-    ) -> Result:
+    ) -> FileTreeResult:
         validate_absolute_path(path)
         if max_depth is not None and max_depth < 1:
             raise ValueError("max_depth must be greater than or equal to 1.")
@@ -39,8 +39,8 @@ class FileTree:
         if not resolved_path.is_dir():
             raise ValueError(f"Path is not a directory: {resolved_path}")
 
-        excluded = frozenset(excluded_names or ())
-        lines = [f"{resolved_path.name}/" if resolved_path.name else str(resolved_path)]
+        excluded_name_set = frozenset(excluded_names or ())
+        tree_lines = [f"{resolved_path.name}/" if resolved_path.name else str(resolved_path)]
         link_count = 0
         directory_count = 0
         file_count = 0
@@ -50,7 +50,8 @@ class FileTree:
             entries = [
                 entry
                 for entry in directory.iterdir()
-                if entry.name not in excluded and (include_hidden or not FileTree._is_hidden(entry))
+                if entry.name not in excluded_name_set
+                and (include_hidden or not FileTree._is_hidden(entry))
             ]
             entries.sort(
                 key=lambda entry: (
@@ -77,34 +78,34 @@ class FileTree:
                 else:
                     label = entry.name
                     file_count += 1
-                lines.append(f"{prefix}{connector}{label}")
+                tree_lines.append(f"{prefix}{connector}{label}")
                 if is_directory and (max_depth is None or depth < max_depth):
                     visit(entry, child_prefix, depth + 1)
 
         visit(resolved_path, "", 1)
-        if len(lines) == 1:
-            lines.append("└── (no visible entries)")
+        if len(tree_lines) == 1:
+            tree_lines.append("└── (no visible entries)")
 
-        return Result(
+        return FileTreeResult(
             resolved_path,
-            tuple(lines),
+            tuple(tree_lines),
             link_count,
             directory_count,
             file_count,
         )
 
     @staticmethod
-    def _format(result: Result) -> str:
-        tree = "\n".join(result.lines)
+    def _format_result(result: FileTreeResult) -> str:
+        formatted_tree = "\n".join(result.tree_lines)
         return (
             f"Path: {result.path}\n"
             f"Links: {result.link_count}\n"
             f"Directories: {result.directory_count}\n"
             f"Files: {result.file_count}\n"
-            f"Tree:\n{tree}"
+            f"Tree:\n{formatted_tree}"
         )
 
-    def file_tree(
+    def list_directory(
         self,
         path: str,
         max_depth: int | None = None,
@@ -124,7 +125,7 @@ class FileTree:
             The resolved path, formatted tree, and displayed entry counts.
         """
 
-        return self._format(
+        return self._format_result(
             self._build(
                 Path(path),
                 max_depth,

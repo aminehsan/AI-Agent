@@ -5,39 +5,38 @@ from .validate import validate_absolute_path, validate_project_path
 
 
 @dataclass(frozen=True, slots=True)
-class Result:
+class FileCreationResult:
     path: Path
-    characters: int
+    character_count: int
 
 
 class FileCreator:
     @staticmethod
-    def _write(path: Path, content: str, encoding: str) -> Result:
+    def _create(path: Path, content: str, encoding: str) -> FileCreationResult:
         validate_absolute_path(path)
-        parent = path.parent
-        resolved_parent = parent.resolve(strict=True)
+        resolved_parent = path.parent.resolve(strict=True)
         validate_project_path(resolved_parent)
         if not resolved_parent.is_dir():
             raise ValueError(f"Parent path is not a directory: {resolved_parent}")
 
         resolved_path = resolved_parent / path.name
-        created = False
+        file_created = False
         try:
             with resolved_path.open("x", encoding=encoding, newline="") as file:
-                created = True
-                characters = file.write(content)
+                file_created = True
+                character_count = file.write(content)
         except Exception:
-            if created:
+            if file_created:
                 resolved_path.unlink(missing_ok=True)
             raise
 
-        return Result(resolved_path, characters)
+        return FileCreationResult(resolved_path, character_count)
 
     @staticmethod
-    def _format(result: Result) -> str:
-        return f"Path: {result.path}\nStatus: created\nCharacters: {result.characters}"
+    def _format_result(result: FileCreationResult) -> str:
+        return f"Path: {result.path}\nStatus: created\nCharacters: {result.character_count}"
 
-    def file_creator(
+    def create_file(
         self,
         path: str,
         content: str,
@@ -55,4 +54,4 @@ class FileCreator:
             The resolved path, creation status, and number of characters written.
         """
 
-        return self._format(self._write(Path(path), content, encoding))
+        return self._format_result(self._create(Path(path), content, encoding))
