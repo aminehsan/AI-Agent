@@ -5,7 +5,7 @@ from openai.types.responses.response_create_params import ContextManagement
 from settings import settings
 
 
-def create_agent_model_settings() -> ModelSettings:
+def create_model_settings() -> ModelSettings:
     return ModelSettings(
         tool_choice="auto",
         parallel_tool_calls=False,

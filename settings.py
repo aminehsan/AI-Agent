@@ -25,9 +25,9 @@ class Settings(BaseSettings):
 
     agent_name: str
     agent_instructions: str
-    conversation_id: str
+    session_id: str
 
-    agent_max_turns: PositiveInt | None
+    run_max_turns: PositiveInt | None
     session_history_limit: PositiveInt | None
 
     project_root: DirectoryPath
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
         return state_directory
 
     @property
-    def conversation_database_path(self) -> Path:
+    def session_database_path(self) -> Path:
         return self.ensure_project_state_directory() / "conversation.db"
 
     @field_validator("project_root")

@@ -3,7 +3,7 @@ from agents import Agent, RunContextWrapper
 from settings import settings
 
 
-def build_agent_instructions(_context: RunContextWrapper, _agent: Agent) -> str:
+def build_instructions(_context: RunContextWrapper, _agent: Agent) -> str:
     return f"""
 {settings.agent_instructions}
 Use the same language as the user's request.

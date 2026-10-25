@@ -6,7 +6,7 @@ from .file_tree import FileTree
 from .project_path import get_project_path
 
 
-def create_agent_tools() -> list[FunctionTool]:
+def create_tools() -> list[FunctionTool]:
     return [
         function_tool(FileTree().list_directory),
         function_tool(FileReader().read_file),
