@@ -7,7 +7,7 @@ from .validate import validate_absolute_path, validate_project_path
 
 
 @dataclass(frozen=True, slots=True)
-class FileTreeResult:
+class FileDirectoryTreeResult:
     path: Path
     tree_lines: tuple[str, ...]
     link_count: int
@@ -15,7 +15,7 @@ class FileTreeResult:
     file_count: int
 
 
-class FileTree:
+class FileDirectoryTree:
     @staticmethod
     def _is_hidden(path: Path) -> bool:
         if path.name.startswith("."):
@@ -24,13 +24,13 @@ class FileTree:
             return bool(path.stat(follow_symlinks=False).st_file_attributes & FILE_ATTRIBUTE_HIDDEN)
         return False
 
-    @staticmethod
     def _build(
+        self,
         path: Path,
         max_depth: int | None,
         include_hidden: bool,
         excluded_names: list[str] | None,
-    ) -> FileTreeResult:
+    ) -> FileDirectoryTreeResult:
         validate_absolute_path(path)
         if max_depth is not None and max_depth < 1:
             raise ValueError("max_depth must be greater than or equal to 1.")
@@ -51,7 +51,7 @@ class FileTree:
                 entry
                 for entry in directory.iterdir()
                 if entry.name not in excluded_name_set
-                and (include_hidden or not FileTree._is_hidden(entry))
+                and (include_hidden or not self._is_hidden(entry))
             ]
             entries.sort(
                 key=lambda entry: (
@@ -86,7 +86,7 @@ class FileTree:
         if len(tree_lines) == 1:
             tree_lines.append("└── (no visible entries)")
 
-        return FileTreeResult(
+        return FileDirectoryTreeResult(
             resolved_path,
             tuple(tree_lines),
             link_count,
@@ -95,7 +95,7 @@ class FileTree:
         )
 
     @staticmethod
-    def _format_result(result: FileTreeResult) -> str:
+    def _format_result(result: FileDirectoryTreeResult) -> str:
         formatted_tree = "\n".join(result.tree_lines)
         return (
             f"Path: {result.path}\n"
@@ -105,7 +105,7 @@ class FileTree:
             f"Tree:\n{formatted_tree}"
         )
 
-    def list_directory(
+    def list_file_directory(
         self,
         path: str,
         max_depth: int | None = None,
