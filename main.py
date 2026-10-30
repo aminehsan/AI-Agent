@@ -1,5 +1,6 @@
-from agent.compaction import compact_session
 from asyncio import run
+
+from agent.compaction import compact_session
 
 # from runner import run_agent
 
