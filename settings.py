@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     def excluded_project_directories(self) -> frozenset[Path]:
         directories = (
             self.PROJECT_STATE_DIRECTORY_NAME,
+            ".git",
             ".idea",
             ".vscode",
             ".venv",
