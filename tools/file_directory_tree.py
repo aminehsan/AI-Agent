@@ -3,9 +3,12 @@ from os import name as os_name
 from pathlib import Path
 from stat import FILE_ATTRIBUTE_HIDDEN
 
+from settings import settings
+
 from .validate import (
     validate_absolute_path,
     validate_directory_path,
+    validate_non_excluded_project_directories_path,
     validate_project_path,
 )
 
@@ -41,19 +44,22 @@ class FileDirectoryTree:
         resolved_path = path.resolve(strict=True)
         validate_project_path(resolved_path)
         validate_directory_path(resolved_path)
+        validate_non_excluded_project_directories_path(resolved_path)
 
         excluded_name_set = frozenset(excluded_names or ())
         tree_lines = [f"{resolved_path.name}/" if resolved_path.name else str(resolved_path)]
         link_count = 0
         directory_count = 0
         file_count = 0
+        excluded_directories = settings.excluded_project_directories
 
         def visit(directory: Path, prefix: str, depth: int) -> None:
             nonlocal link_count, directory_count, file_count
             entries = [
                 entry
                 for entry in directory.iterdir()
-                if entry.name not in excluded_name_set
+                if entry not in excluded_directories
+                and entry.name not in excluded_name_set
                 and (include_hidden or not self._is_hidden(entry))
             ]
             entries.sort(
@@ -117,6 +123,7 @@ class FileDirectoryTree:
     ) -> str:
         """
         List files and directories as a deterministic tree without following links.
+        Configured project directories and their contents are always omitted.
 
         Args:
             path: Absolute path of a directory inside the project.
