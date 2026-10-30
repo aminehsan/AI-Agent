@@ -1,3 +1,4 @@
+from functools import cached_property
 from pathlib import Path
 from typing import ClassVar, Literal
 
@@ -55,11 +56,11 @@ class Settings(BaseSettings):
             gitignore.write_text("*\n", encoding="utf-8")
         return state_directory
 
-    @property
+    @cached_property
     def session_database_path(self) -> Path:
         return self.ensure_project_state_directory() / "conversation.db"
 
-    @property
+    @cached_property
     def excluded_project_directories(self) -> frozenset[Path]:
         directories = (
             self.PROJECT_STATE_DIRECTORY_NAME,

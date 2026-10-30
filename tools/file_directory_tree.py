@@ -51,14 +51,13 @@ class FileDirectoryTree:
         link_count = 0
         directory_count = 0
         file_count = 0
-        excluded_directories = settings.excluded_project_directories
 
         def visit(directory: Path, prefix: str, depth: int) -> None:
             nonlocal link_count, directory_count, file_count
             entries = [
                 entry
                 for entry in directory.iterdir()
-                if entry not in excluded_directories
+                if entry not in settings.excluded_project_directories
                 and entry.name not in excluded_name_set
                 and (include_hidden or not self._is_hidden(entry))
             ]
