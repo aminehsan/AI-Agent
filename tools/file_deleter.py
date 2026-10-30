@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from .validate import validate_absolute_path, validate_project_path
+from .validate import (
+    validate_absolute_path,
+    validate_file_path,
+    validate_non_link_path,
+    validate_project_path,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,16 +18,13 @@ class FileDeleter:
     @staticmethod
     def _delete(path: Path) -> FileDeletionResult:
         validate_absolute_path(path)
-        if path.is_symlink() or path.is_junction():
-            raise ValueError(f"Path must not be a link: {path}")
+        validate_non_link_path(path)
 
         resolved_path = path.resolve(strict=True)
         validate_project_path(resolved_path)
-        if not resolved_path.is_file():
-            raise ValueError(f"Path is not a regular file: {resolved_path}")
+        validate_file_path(resolved_path)
 
         resolved_path.unlink()
-
         return FileDeletionResult(resolved_path)
 
     @staticmethod

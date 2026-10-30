@@ -1,7 +1,11 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from .validate import validate_absolute_path, validate_project_path
+from .validate import (
+    validate_absolute_path,
+    validate_directory_parent_path,
+    validate_project_path,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,12 +19,10 @@ class DirectoryCreator:
         validate_absolute_path(path)
         resolved_parent = path.parent.resolve(strict=True)
         validate_project_path(resolved_parent)
-        if not resolved_parent.is_dir():
-            raise ValueError(f"Parent path is not a directory: {resolved_parent}")
+        validate_directory_parent_path(resolved_parent)
 
         resolved_path = resolved_parent / path.name
         resolved_path.mkdir()
-
         return DirectoryCreationResult(resolved_path)
 
     @staticmethod

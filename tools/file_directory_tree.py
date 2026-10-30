@@ -3,7 +3,11 @@ from os import name as os_name
 from pathlib import Path
 from stat import FILE_ATTRIBUTE_HIDDEN
 
-from .validate import validate_absolute_path, validate_project_path
+from .validate import (
+    validate_absolute_path,
+    validate_directory_path,
+    validate_project_path,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,8 +40,7 @@ class FileDirectoryTree:
             raise ValueError("max_depth must be greater than or equal to 1.")
         resolved_path = path.resolve(strict=True)
         validate_project_path(resolved_path)
-        if not resolved_path.is_dir():
-            raise ValueError(f"Path is not a directory: {resolved_path}")
+        validate_directory_path(resolved_path)
 
         excluded_name_set = frozenset(excluded_names or ())
         tree_lines = [f"{resolved_path.name}/" if resolved_path.name else str(resolved_path)]
