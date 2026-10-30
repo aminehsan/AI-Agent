@@ -9,6 +9,11 @@ def validate_project_path(path: Path) -> None:
         raise ValueError(f"Path must be inside project root: {project_root}, received: {path}")
 
 
+def validate_non_project_root_path(path: Path) -> None:
+    if path == settings.project_root:
+        raise ValueError(f"Path must not be the project root: {path}")
+
+
 def validate_absolute_path(path: Path) -> None:
     if not path.is_absolute():
         raise ValueError(f"Path must be absolute: {path}")

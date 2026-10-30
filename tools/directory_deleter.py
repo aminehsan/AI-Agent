@@ -5,6 +5,7 @@ from .validate import (
     validate_absolute_path,
     validate_directory_path,
     validate_non_link_path,
+    validate_non_project_root_path,
     validate_project_path,
 )
 
@@ -22,6 +23,7 @@ class DirectoryDeleter:
 
         resolved_path = path.resolve(strict=True)
         validate_project_path(resolved_path)
+        validate_non_project_root_path(resolved_path)
         validate_directory_path(resolved_path)
 
         resolved_path.rmdir()
