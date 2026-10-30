@@ -1,4 +1,5 @@
 from functools import cached_property
+from os import name as os_name
 from pathlib import Path
 from typing import ClassVar, Literal
 
@@ -11,6 +12,11 @@ from pydantic import (
     validate_call,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if os_name == "nt":
+    from stat import FILE_ATTRIBUTE_HIDDEN
+
+    from win32api import SetFileAttributes
 
 
 class Settings(BaseSettings):
@@ -51,6 +57,8 @@ class Settings(BaseSettings):
     def ensure_project_state_directory(self) -> DirectoryPath:
         state_directory = self.project_root / self.PROJECT_STATE_DIRECTORY_NAME
         state_directory.mkdir(parents=True, exist_ok=True)
+        if os_name == "nt":
+            SetFileAttributes(str(state_directory), FILE_ATTRIBUTE_HIDDEN)
         gitignore = state_directory / ".gitignore"
         if not gitignore.exists():
             gitignore.write_text("*\n", encoding="utf-8")

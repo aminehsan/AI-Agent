@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from os import name as os_name
 from pathlib import Path
-from stat import FILE_ATTRIBUTE_HIDDEN
 
 from settings import settings
 
@@ -11,6 +10,9 @@ from .validate import (
     validate_non_excluded_project_path,
     validate_project_path,
 )
+
+if os_name == "nt":
+    from stat import FILE_ATTRIBUTE_HIDDEN
 
 
 @dataclass(frozen=True, slots=True)
