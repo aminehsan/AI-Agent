@@ -8,7 +8,7 @@ from settings import settings
 from .validate import (
     validate_absolute_path,
     validate_directory_path,
-    validate_non_excluded_project_directories_path,
+    validate_non_excluded_project_path,
     validate_project_path,
 )
 
@@ -43,8 +43,8 @@ class FileDirectoryTree:
             raise ValueError("max_depth must be greater than or equal to 1.")
         resolved_path = path.resolve(strict=True)
         validate_project_path(resolved_path)
+        validate_non_excluded_project_path(resolved_path)
         validate_directory_path(resolved_path)
-        validate_non_excluded_project_directories_path(resolved_path)
 
         excluded_name_set = frozenset(excluded_names or ())
         tree_lines = [f"{resolved_path.name}/" if resolved_path.name else str(resolved_path)]

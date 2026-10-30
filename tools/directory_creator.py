@@ -4,6 +4,7 @@ from pathlib import Path
 from .validate import (
     validate_absolute_path,
     validate_directory_parent_path,
+    validate_non_excluded_project_path,
     validate_project_path,
 )
 
@@ -22,6 +23,7 @@ class DirectoryCreator:
         validate_directory_parent_path(resolved_parent)
 
         resolved_path = resolved_parent / path.name
+        validate_non_excluded_project_path(resolved_path)
         resolved_path.mkdir()
         return DirectoryCreationResult(resolved_path)
 
@@ -34,7 +36,7 @@ class DirectoryCreator:
         Create a new directory at an absolute path.
 
         Args:
-            path: Absolute path of a new directory inside the project.
+            path: Absolute path of a new directory inside the project and outside excluded directories.
 
         Returns:
             The resolved path and creation status.

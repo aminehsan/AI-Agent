@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from .validate import validate_absolute_path, validate_file_path, validate_project_path
+from .validate import (
+    validate_absolute_path,
+    validate_file_path,
+    validate_non_excluded_project_path,
+    validate_project_path,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +31,7 @@ class FileReader:
             raise ValueError("end_line must be greater than or equal to start_line.")
         resolved_path = path.resolve(strict=True)
         validate_project_path(resolved_path)
+        validate_non_excluded_project_path(resolved_path)
         validate_file_path(resolved_path)
 
         selected_lines: list[str] = []
@@ -72,7 +78,7 @@ class FileReader:
         Read text from an absolute file path.
 
         Args:
-            path: Absolute path of a text file inside the project.
+            path: Absolute path of a text file inside the project and outside excluded directories.
             start_line: First line to return, using one-based numbering; defaults to 1.
             end_line: Last line to return, inclusive; null reads to end of file; defaults to None.
             encoding: Text encoding used to read the file; defaults to utf-8.

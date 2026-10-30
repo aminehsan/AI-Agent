@@ -4,6 +4,7 @@ from pathlib import Path
 from .validate import (
     validate_absolute_path,
     validate_file_path,
+    validate_non_excluded_project_path,
     validate_non_link_path,
     validate_project_path,
 )
@@ -22,6 +23,7 @@ class FileDeleter:
 
         resolved_path = path.resolve(strict=True)
         validate_project_path(resolved_path)
+        validate_non_excluded_project_path(resolved_path)
         validate_file_path(resolved_path)
 
         resolved_path.unlink()
@@ -36,7 +38,7 @@ class FileDeleter:
         Permanently delete a file at an absolute path.
 
         Args:
-            path: Absolute path of a regular file inside the project; links are rejected.
+            path: Absolute path of a regular file inside the project and outside excluded directories; links are rejected.
 
         Returns:
             The resolved path and deletion status.

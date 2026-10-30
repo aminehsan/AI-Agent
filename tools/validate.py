@@ -39,7 +39,7 @@ def validate_non_link_path(path: Path) -> None:
         raise ValueError(f"Path must not be a link: {path}")
 
 
-def validate_non_excluded_project_directories_path(path: Path) -> None:
+def validate_non_excluded_project_path(path: Path) -> None:
     directories = tuple(directory.resolve() for directory in settings.excluded_project_directories)
     if any(path.is_relative_to(directory) for directory in directories):
         raise ValueError(f"Path must not be inside an excluded project directory: {path}")

@@ -4,6 +4,7 @@ from pathlib import Path
 from .validate import (
     validate_absolute_path,
     validate_directory_path,
+    validate_non_excluded_project_path,
     validate_non_link_path,
     validate_non_project_root_path,
     validate_project_path,
@@ -24,6 +25,7 @@ class DirectoryDeleter:
         resolved_path = path.resolve(strict=True)
         validate_project_path(resolved_path)
         validate_non_project_root_path(resolved_path)
+        validate_non_excluded_project_path(resolved_path)
         validate_directory_path(resolved_path)
 
         resolved_path.rmdir()
@@ -38,7 +40,7 @@ class DirectoryDeleter:
         Permanently delete an empty directory at an absolute path.
 
         Args:
-            path: Absolute path of an empty directory inside the project; links are rejected.
+            path: Absolute path of an empty directory inside the project and outside excluded directories; links are rejected.
 
         Returns:
             The resolved path and deletion status.
