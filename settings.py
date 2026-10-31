@@ -13,11 +13,6 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-if os_name == "nt":
-    from stat import FILE_ATTRIBUTE_HIDDEN
-
-    from win32api import SetFileAttributes
-
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -58,6 +53,10 @@ class Settings(BaseSettings):
         state_directory = self.project_root / self.PROJECT_STATE_DIRECTORY_NAME
         state_directory.mkdir(parents=True, exist_ok=True)
         if os_name == "nt":
+            from stat import FILE_ATTRIBUTE_HIDDEN
+
+            from win32api import SetFileAttributes
+
             SetFileAttributes(str(state_directory), FILE_ATTRIBUTE_HIDDEN)
         gitignore = state_directory / ".gitignore"
         if not gitignore.exists():
