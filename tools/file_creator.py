@@ -41,12 +41,7 @@ class FileCreator:
     def _format_result(result: FileCreationResult) -> str:
         return f"Path: {result.path}\nStatus: created\nCharacters: {result.character_count}"
 
-    def create_file(
-        self,
-        path: str,
-        content: str,
-        encoding: str = "utf-8",
-    ) -> str:
+    def create_file(self, path: str, content: str, encoding: str = "utf-8") -> str:
         """
         Create a new text file at an absolute path.
 

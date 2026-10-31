@@ -1,18 +1,15 @@
 from dataclasses import dataclass
-from os import name as os_name
 from pathlib import Path
 
 from settings import settings
 
+from .utility import is_hidden_path
 from .validate import (
     validate_absolute_path,
     validate_directory_path,
     validate_non_excluded_project_path,
     validate_project_path,
 )
-
-if os_name == "nt":
-    from stat import FILE_ATTRIBUTE_HIDDEN
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,14 +22,6 @@ class FileDirectoryTreeResult:
 
 
 class FileDirectoryTree:
-    @staticmethod
-    def _is_hidden(path: Path) -> bool:
-        if path.name.startswith("."):
-            return True
-        if os_name == "nt":
-            return bool(path.stat(follow_symlinks=False).st_file_attributes & FILE_ATTRIBUTE_HIDDEN)
-        return False
-
     def _build(
         self,
         path: Path,
@@ -54,14 +43,14 @@ class FileDirectoryTree:
         directory_count = 0
         file_count = 0
 
-        def visit(directory: Path, prefix: str, depth: int) -> None:
+        def _visit(directory: Path, prefix: str, depth: int) -> None:
             nonlocal link_count, directory_count, file_count
             entries = [
                 entry
                 for entry in directory.iterdir()
                 if entry not in settings.excluded_project_directories
                 and entry.name not in excluded_name_set
-                and (include_hidden or not self._is_hidden(entry))
+                and (include_hidden or not is_hidden_path(entry))
             ]
             entries.sort(
                 key=lambda entry: (
@@ -90,9 +79,9 @@ class FileDirectoryTree:
                     file_count += 1
                 tree_lines.append(f"{prefix}{connector}{label}")
                 if is_directory and (max_depth is None or depth < max_depth):
-                    visit(entry, child_prefix, depth + 1)
+                    _visit(entry, child_prefix, depth + 1)
 
-        visit(resolved_path, "", 1)
+        _visit(resolved_path, "", 1)
         if len(tree_lines) == 1:
             tree_lines.append("└── (no visible entries)")
 

@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from os import name as os_name
 from pathlib import Path
 from re import IGNORECASE, compile, escape
 
 from settings import settings
 
+from .utility import is_hidden_path
 from .validate import (
     validate_absolute_path,
     validate_directory_path,
@@ -12,16 +12,18 @@ from .validate import (
     validate_project_path,
 )
 
-if os_name == "nt":
-    from stat import FILE_ATTRIBUTE_HIDDEN
+
+@dataclass(frozen=True, slots=True)
+class FileSearchLine:
+    line_number: int
+    line: str
 
 
 @dataclass(frozen=True, slots=True)
 class FileSearchMatch:
     path: Path
     line_number: int
-    column_number: int
-    line: str
+    context: tuple[FileSearchLine, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,43 +39,36 @@ class FileSearchResult:
 
 class FileSearcher:
     @staticmethod
-    def _is_hidden(path: Path) -> bool:
-        if path.name.startswith("."):
-            return True
-        if os_name == "nt":
-            return bool(path.stat(follow_symlinks=False).st_file_attributes & FILE_ATTRIBUTE_HIDDEN)
-        return False
-
-    @staticmethod
     def _matches_file_pattern(path: Path, root: Path, patterns: tuple[str, ...]) -> bool:
-        if not patterns:
-            return True
         relative_path = path.relative_to(root)
-        return any(
+        return not patterns or any(
             relative_path.full_match(pattern) if "/" in pattern else relative_path.match(pattern)
             for pattern in patterns
         )
 
     @staticmethod
     def _shorten_line(
-        line: str,
-        match_start: int,
-        match_end: int,
-        max_line_length: int | None,
+        line: str, match_start: int, match_end: int, max_line_length: int | None
     ) -> str:
         line = line.rstrip("\r\n")
         if max_line_length is None or len(line) <= max_line_length:
             return line
-
         match_length = match_end - match_start
         start = max(0, match_start - max(0, max_line_length - match_length) // 2)
         start = min(start, len(line) - max_line_length)
         end = start + max_line_length
-
         return f"{'…' if start else ''}{line[start:end]}{'…' if end < len(line) else ''}"
 
+    @staticmethod
+    def _shorten_context_line(line: str, max_line_length: int | None) -> str:
+        line = line.rstrip("\r\n")
+        if max_line_length is None or len(line) <= max_line_length:
+            return line
+        return f"{line[:max_line_length]}…"
+
+    @classmethod
     def _search(
-        self,
+        cls,
         path: Path,
         query: str,
         use_regex: bool,
@@ -94,8 +89,6 @@ class FileSearcher:
             raise ValueError("max_line_length must be positive.")
 
         patterns = tuple(file_patterns or ())
-        if any(not pattern for pattern in patterns):
-            raise ValueError("file_patterns must not contain empty patterns.")
 
         resolved_path = path.resolve(strict=True)
         validate_project_path(resolved_path)
@@ -113,41 +106,44 @@ class FileSearcher:
         matched_file_count = 0
         skipped_path_count = 0
 
-        def search_file(file_path: Path) -> list[FileSearchMatch] | None:
-            found: list[FileSearchMatch] = []
+        def _search_file(file_path: Path) -> list[FileSearchMatch] | None:
             try:
                 with file_path.open("r", encoding=encoding, newline="") as file:
-                    for line_number, line in enumerate(file, start=1):
-                        if "\0" in line:
-                            return None
-
-                        match = pattern.search(line)
-                        if match is None:
-                            continue
-
-                        found.append(
-                            FileSearchMatch(
-                                file_path,
-                                line_number,
-                                match.start() + 1,
-                                self._shorten_line(
-                                    line,
-                                    match.start(),
-                                    match.end(),
-                                    max_line_length,
-                                ),
-                            )
-                        )
-
-                        if max_results is not None and len(matches) + len(found) >= max_results:
-                            break
-
+                    lines = file.readlines()
             except OSError, UnicodeError:
                 return None
 
+            found: list[FileSearchMatch] = []
+            for index, line in enumerate(lines):
+                if max_results is not None and len(matches) + len(found) >= max_results:
+                    break
+
+                match = pattern.search(line)
+                if match is None:
+                    continue
+
+                context: list[FileSearchLine] = []
+                for context_index in range(max(0, index - 1), min(len(lines), index + 2)):
+                    context_line = lines[context_index]
+                    if context_index == index:
+                        text = cls._shorten_line(
+                            context_line,
+                            match.start(),
+                            match.end(),
+                            max_line_length,
+                        )
+                    else:
+                        text = cls._shorten_context_line(
+                            context_line,
+                            max_line_length,
+                        )
+                    context.append(FileSearchLine(context_index + 1, text))
+
+                found.append(FileSearchMatch(file_path, index + 1, tuple(context)))
+
             return found
 
-        def visit(directory: Path) -> None:
+        def _visit(directory: Path) -> None:
             nonlocal searched_file_count, matched_file_count, skipped_path_count
 
             try:
@@ -167,19 +163,19 @@ class FileSearcher:
                     if (
                         entry in excluded_directories
                         or entry.name in excluded_name_set
-                        or (not include_hidden and self._is_hidden(entry))
+                        or (not include_hidden and is_hidden_path(entry))
                         or entry.is_symlink()
                         or entry.is_junction()
                     ):
                         continue
 
                     if entry.is_dir():
-                        visit(entry)
-                    elif entry.is_file() and self._matches_file_pattern(
+                        _visit(entry)
+                    elif entry.is_file() and cls._matches_file_pattern(
                         entry, resolved_path, patterns
                     ):
                         searched_file_count += 1
-                        found = search_file(entry)
+                        found = _search_file(entry)
 
                         if found is None:
                             skipped_path_count += 1
@@ -190,7 +186,7 @@ class FileSearcher:
                 except OSError:
                     skipped_path_count += 1
 
-        visit(resolved_path)
+        _visit(resolved_path)
 
         return FileSearchResult(
             resolved_path,
@@ -213,17 +209,23 @@ class FileSearcher:
             f"Skipped paths: {result.skipped_path_count}\n"
             f"Limit reached: {'yes' if result.limit_reached else 'no'}"
         )
-        if not result.matches:
-            return f"{header}\nResults: No matches found"
 
-        content = "\n".join(
-            f"{match.path}:{match.line_number}:{match.column_number}: {match.line}"
-            for match in result.matches
-        )
+        def _format_match(match: FileSearchMatch) -> str:
+            last_line = match.context[-1].line_number
+            line_number_width = len(str(last_line))
+            lines = "\n".join(
+                f"{'>' if line.line_number == match.line_number else ' '} "
+                f"{line.line_number:>{line_number_width}}|{line.line}"
+                for line in match.context
+            )
+            return f"{match.path}:{match.line_number}\n{lines}"
+
+        content = "\n\n".join(_format_match(match) for match in result.matches)
         return f"{header}\nResults:\n{content}"
 
+    @classmethod
     def search_files(
-        self,
+        cls,
         path: str,
         query: str,
         use_regex: bool = False,
@@ -248,14 +250,15 @@ class FileSearcher:
             include_hidden: Whether to search hidden files and directories; defaults to False.
             excluded_names: Exact file or directory names to omit at every depth; defaults to None.
             max_results: Maximum matching lines to return; None means unlimited; defaults to None.
-            max_line_length: Maximum original characters per matching line; None means unlimited; defaults to None.
+            max_line_length: Maximum original characters per displayed line; None means unlimited; defaults to None.
             encoding: Text encoding used to read files; defaults to utf-8.
 
         Returns:
-            Search statistics and matching lines with absolute paths, line numbers, and column numbers.
+            Search statistics and matching lines with absolute paths and line numbers.
         """
-        return self._format_result(
-            self._search(
+
+        return cls._format_result(
+            cls._search(
                 Path(path),
                 query,
                 use_regex,
