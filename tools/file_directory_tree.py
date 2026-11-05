@@ -22,8 +22,8 @@ class FileDirectoryTreeResult:
 
 
 class FileDirectoryTree:
+    @staticmethod
     def _build(
-        self,
         path: Path,
         max_depth: int | None,
         include_hidden: bool,
