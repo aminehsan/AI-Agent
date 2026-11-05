@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from os import fstat
-from os.path import samestat
 from pathlib import Path
 
+from .utility import has_file_changed
 from .validate import (
     validate_absolute_path,
     validate_file_path,
@@ -38,16 +38,13 @@ class FileEditor:
 
             match_count = content.count(old_text)
             if match_count != 1:
-                raise ValueError(f"old_text must occur exactly once; found {match_count} occurrences.")
+                raise ValueError(
+                    f"old_text must occur exactly once; found {match_count} occurrences."
+                )
 
             updated_content = content.replace(old_text, new_text, 1)
 
-            current_stat = resolved_path.lstat()
-            if (
-                not samestat(original_stat, current_stat)
-                or original_stat.st_mtime_ns != current_stat.st_mtime_ns
-                or original_stat.st_size != current_stat.st_size
-            ):
+            if has_file_changed(resolved_path, original_stat):
                 raise ValueError("The file changed during editing. Read it again before retrying.")
 
             try:
