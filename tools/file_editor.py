@@ -38,7 +38,11 @@ class FileEditor:
             original_stat = fstat(file.fileno())
             content = file.read()
 
-            match_count = content.count(old_text)
+            match_count = 0
+            match_index = content.find(old_text)
+            while match_index != -1:
+                match_count += 1
+                match_index = content.find(old_text, match_index + 1)
             if match_count != 1:
                 raise ValueError(
                     f"old_text must occur exactly once; found {match_count} occurrences."
@@ -86,7 +90,7 @@ class FileEditor:
 
         Args:
             path: Absolute path of a text file inside the project and outside excluded directories; symbolic, junction, and hard links are rejected.
-            old_text: Non-empty text that must occur exactly once, including matching case, whitespace, and line endings.
+            old_text: Non-empty text that must occur at exactly one position, counting overlapping matches; case, whitespace, and line endings must match.
             new_text: Different text to insert exactly as provided; an empty string removes the matched text.
             encoding: Text encoding used to read and write the file; defaults to utf-8.
 
