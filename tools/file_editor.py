@@ -37,7 +37,6 @@ class FileEditor:
         with resolved_path.open("r+", encoding=encoding, newline="") as file:
             original_stat = fstat(file.fileno())
             content = file.read()
-
             match_count = 0
             match_index = content.find(old_text)
             while match_index != -1:

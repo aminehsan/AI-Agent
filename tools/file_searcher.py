@@ -106,7 +106,6 @@ class FileSearcher:
         searched_file_count = 0
         matched_file_count = 0
         skipped_path_count = 0
-
         def _search_file(file_path: Path) -> list[FileSearchMatch] | None:
             found: list[FileSearchMatch] = []
             try:
