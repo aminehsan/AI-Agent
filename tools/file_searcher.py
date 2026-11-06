@@ -1,6 +1,7 @@
+from bisect import bisect_right
 from dataclasses import dataclass
 from pathlib import Path
-from re import IGNORECASE, compile, escape
+from re import DOTALL, IGNORECASE, MULTILINE, compile, escape
 
 from settings import settings
 
@@ -22,7 +23,8 @@ class FileSearchLine:
 @dataclass(frozen=True, slots=True)
 class FileSearchMatch:
     path: Path
-    line_number: int
+    start_line_number: int
+    end_line_number: int
     context: tuple[FileSearchLine, ...]
 
 
@@ -51,6 +53,8 @@ class FileSearcher:
         line: str, match_start: int, match_end: int, max_line_length: int | None
     ) -> str:
         line = line.rstrip("\r\n")
+        match_start = max(0, min(len(line), match_start))
+        match_end = max(match_start, min(len(line), match_end))
         if max_line_length is None or len(line) <= max_line_length:
             return line
         match_length = match_end - match_start
@@ -88,17 +92,14 @@ class FileSearcher:
             raise ValueError("max_line_length must be positive.")
 
         patterns = tuple(file_patterns or ())
-        if any(not pattern for pattern in patterns):
-            raise ValueError("file_patterns must not contain empty patterns.")
 
         resolved_path = path.resolve(strict=True)
         validate_project_path(resolved_path)
         validate_non_excluded_project_path(resolved_path)
         validate_directory_path(resolved_path)
 
-        pattern = compile(
-            query if use_regex else escape(query), 0 if case_sensitive else IGNORECASE
-        )
+        flags = DOTALL | MULTILINE | (0 if case_sensitive else IGNORECASE)
+        pattern = compile(query if use_regex else escape(query), flags)
         excluded_name_set = frozenset(excluded_names or ())
         excluded_directories = settings.excluded_project_directories
 
@@ -106,34 +107,50 @@ class FileSearcher:
         searched_file_count = 0
         matched_file_count = 0
         skipped_path_count = 0
+
         def _search_file(file_path: Path) -> list[FileSearchMatch] | None:
             found: list[FileSearchMatch] = []
             try:
                 with file_path.open("r", encoding=encoding, newline="") as file:
-                    lines = file.read().splitlines(keepends=True)
-                for line_number, line in enumerate(lines, start=1):
+                    content = file.read()
+
+                lines = (content + "\0").splitlines(keepends=True)
+                lines[-1] = lines[-1][:-1]
+
+                line_starts = [0]
+                for line in lines[:-1]:
+                    line_starts.append(line_starts[-1] + len(line))
+
+                for match in pattern.finditer(content):
+                    start_offset, end_offset = match.span()
+                    start_line_number = bisect_right(line_starts, start_offset)
+                    end_line_number = bisect_right(line_starts, max(start_offset, end_offset - 1))
+                    context: list[FileSearchLine] = []
+
+                    for line_number in range(
+                        max(1, start_line_number - 1),
+                        min(len(lines), end_line_number + 1) + 1,
+                    ):
+                        line = lines[line_number - 1]
+                        if start_line_number <= line_number <= end_line_number:
+                            line_offset = line_starts[line_number - 1]
+                            displayed_line = self._shorten_line(
+                                line,
+                                start_offset - line_offset,
+                                end_offset - line_offset,
+                                max_line_length,
+                            )
+                        else:
+                            displayed_line = self._shorten_context_line(line, max_line_length)
+                        context.append(FileSearchLine(line_number, displayed_line))
+
+                    found.append(
+                        FileSearchMatch(
+                            file_path, start_line_number, end_line_number, tuple(context)
+                        )
+                    )
                     if max_results is not None and len(matches) + len(found) >= max_results:
                         break
-                    match = pattern.search(line)
-                    if match is not None:
-                        context: list[FileSearchLine] = []
-                        first_line = max(1, line_number - 1)
-                        last_line = min(len(lines), line_number + 1)
-                        for context_line_number in range(first_line, last_line + 1):
-                            context_line = lines[context_line_number - 1]
-                            if context_line_number == line_number:
-                                displayed_line = self._shorten_line(
-                                    context_line,
-                                    match.start(),
-                                    match.end(),
-                                    max_line_length,
-                                )
-                            else:
-                                displayed_line = self._shorten_context_line(
-                                    context_line, max_line_length
-                                )
-                            context.append(FileSearchLine(context_line_number, displayed_line))
-                        found.append(FileSearchMatch(file_path, line_number, tuple(context)))
             except OSError, UnicodeError:
                 return None
             return found
@@ -188,9 +205,10 @@ class FileSearcher:
 
     @staticmethod
     def _format_result(result: FileSearchResult) -> str:
+        displayed_query = result.query.replace("\r", "\\r").replace("\n", "\\n")
         header = (
             f"Path: {result.path}\n"
-            f"Query: {result.query}\n"
+            f"Query: {displayed_query}\n"
             f"Matches: {len(result.matches)}\n"
             f"Matched files: {result.matched_file_count}\n"
             f"Searched files: {result.searched_file_count}\n"
@@ -204,11 +222,14 @@ class FileSearcher:
             last_line = match.context[-1].line_number
             line_number_width = len(str(last_line))
             lines = "\n".join(
-                f"{'>' if line.line_number == match.line_number else ' '} "
+                f"{'>' if match.start_line_number <= line.line_number <= match.end_line_number else ' '} "
                 f"{line.line_number:>{line_number_width}}|{line.line}"
                 for line in match.context
             )
-            return f"{match.path}:{match.line_number}\n{lines}"
+            location = str(match.start_line_number)
+            if match.end_line_number != match.start_line_number:
+                location = f"{location}-{match.end_line_number}"
+            return f"{match.path}:{location}\n{lines}"
 
         content = "\n\n".join(_format_match(match) for match in result.matches)
 
@@ -229,6 +250,7 @@ class FileSearcher:
     ) -> str:
         """
         Search text recursively inside files without following links.
+        Literal and regex queries can match across lines; regex dots also match newlines.
         Configured project directories and their contents are always omitted.
 
         Args:
@@ -239,12 +261,12 @@ class FileSearcher:
             file_patterns: Optional glob patterns for relative file paths, such as ["*.py", "src/**/*.ts"].
             include_hidden: Whether to search hidden files and directories; defaults to False.
             excluded_names: Exact file or directory names to omit at every depth; defaults to None.
-            max_results: Maximum matching lines to return; None means unlimited; defaults to None.
+            max_results: Maximum matching occurrences to return; None means unlimited; defaults to None.
             max_line_length: Maximum original characters per displayed line; None means unlimited; defaults to None.
             encoding: Text encoding used to read files; defaults to utf-8.
 
         Returns:
-            Search statistics and matching lines with absolute paths and line numbers.
+            Search statistics and matching occurrences with absolute paths and line ranges.
         """
 
         return self._format_result(
