@@ -7,6 +7,7 @@ from .validate import (
     validate_absolute_path,
     validate_file_path,
     validate_non_excluded_project_path,
+    validate_non_hard_link_path,
     validate_non_link_path,
     validate_project_path,
 )
@@ -31,6 +32,7 @@ class FileEditor:
         validate_project_path(resolved_path)
         validate_non_excluded_project_path(resolved_path)
         validate_file_path(resolved_path)
+        validate_non_hard_link_path(resolved_path)
 
         with resolved_path.open("r+", encoding=encoding, newline="") as file:
             original_stat = fstat(file.fileno())
@@ -83,7 +85,7 @@ class FileEditor:
         Replace a single exact occurrence of text in an existing file.
 
         Args:
-            path: Absolute path of a text file inside the project and outside excluded directories; links are rejected.
+            path: Absolute path of a text file inside the project and outside excluded directories; symbolic, junction, and hard links are rejected.
             old_text: Non-empty text that must occur exactly once, including matching case, whitespace, and line endings.
             new_text: Different text to insert exactly as provided; an empty string removes the matched text.
             encoding: Text encoding used to read and write the file; defaults to utf-8.
