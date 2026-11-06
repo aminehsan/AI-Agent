@@ -112,52 +112,31 @@ class FileSearcher:
             try:
                 with file_path.open("r", encoding=encoding, newline="") as file:
                     lines = file.read().splitlines(keepends=True)
-
                 for line_number, line in enumerate(lines, start=1):
                     if max_results is not None and len(matches) + len(found) >= max_results:
                         break
-
                     match = pattern.search(line)
                     if match is not None:
                         context: list[FileSearchLine] = []
-                        if line_number > 1:
-                            context.append(
-                                FileSearchLine(
-                                    line_number - 1,
-                                    self._shorten_context_line(
-                                        lines[line_number - 2],
-                                        max_line_length,
-                                    ),
-                                )
-                            )
-                        context.append(
-                            FileSearchLine(
-                                line_number,
-                                self._shorten_line(
-                                    line,
+                        first_line = max(1, line_number - 1)
+                        last_line = min(len(lines), line_number + 1)
+                        for context_line_number in range(first_line, last_line + 1):
+                            context_line = lines[context_line_number - 1]
+                            if context_line_number == line_number:
+                                displayed_line = self._shorten_line(
+                                    context_line,
                                     match.start(),
                                     match.end(),
                                     max_line_length,
-                                ),
-                            )
-                        )
-
-                        if line_number < len(lines):
-                            context.append(
-                                FileSearchLine(
-                                    line_number + 1,
-                                    self._shorten_context_line(
-                                        lines[line_number],
-                                        max_line_length,
-                                    ),
                                 )
-                            )
-
+                            else:
+                                displayed_line = self._shorten_context_line(
+                                    context_line, max_line_length
+                                )
+                            context.append(FileSearchLine(context_line_number, displayed_line))
                         found.append(FileSearchMatch(file_path, line_number, tuple(context)))
-
             except OSError, UnicodeError:
                 return None
-
             return found
 
         def _visit(directory: Path) -> None:
@@ -173,7 +152,6 @@ class FileSearcher:
             for entry in entries:
                 if max_results is not None and len(matches) >= max_results:
                     return
-
                 try:
                     if (
                         entry in excluded_directories
@@ -183,7 +161,6 @@ class FileSearcher:
                         or entry.is_junction()
                     ):
                         continue
-
                     if entry.is_dir():
                         _visit(entry)
                     elif entry.is_file() and self._matches_file_pattern(
@@ -200,7 +177,6 @@ class FileSearcher:
                     skipped_path_count += 1
 
         _visit(resolved_path)
-
         return FileSearchResult(
             resolved_path,
             query,

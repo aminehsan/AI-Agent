@@ -2,7 +2,7 @@
 Programming agent built with the OpenAI Agents SDK. It supports OpenAI-compatible APIs.
 
 ## Requirements
-- Python 3.13 or newer.
+- Python 3.14 or newer.
 - The provider must support the Responses API at `/v1/responses`.
 
 ## Run
