@@ -34,14 +34,9 @@ class FileReader:
         validate_non_excluded_project_path(resolved_path)
         validate_file_path(resolved_path)
 
-        selected_lines: list[str] = []
         with resolved_path.open("r", encoding=encoding, errors="strict", newline="") as file:
-            for line_number, line in enumerate(file, start=1):
-                if line_number < start_line:
-                    continue
-                if end_line is not None and line_number > end_line:
-                    break
-                selected_lines.append(line)
+            lines = file.read().splitlines(keepends=True)
+        selected_lines = lines[start_line - 1 : end_line]
 
         return FileReadResult(resolved_path, tuple(selected_lines), start_line)
 

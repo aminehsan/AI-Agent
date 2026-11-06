@@ -111,54 +111,49 @@ class FileSearcher:
             found: list[FileSearchMatch] = []
             try:
                 with file_path.open("r", encoding=encoding, newline="") as file:
-                    previous: tuple[int, str] | None = None
-                    lines = enumerate(file, start=1)
-                    current = next(lines, None)
-                    if current is None:
-                        return found
+                    lines = file.read().splitlines(keepends=True)
 
-                    while current is not None:
-                        if max_results is not None and len(matches) + len(found) >= max_results:
-                            break
-                        following = next(lines, None)
-                        line_number, line = current
-                        match = pattern.search(line)
-                        if match is not None:
-                            context: list[FileSearchLine] = []
-                            if previous is not None:
-                                context.append(
-                                    FileSearchLine(
-                                        previous[0],
-                                        self._shorten_context_line(
-                                            previous[1],
-                                            max_line_length,
-                                        ),
-                                    )
-                                )
+                for line_number, line in enumerate(lines, start=1):
+                    if max_results is not None and len(matches) + len(found) >= max_results:
+                        break
+
+                    match = pattern.search(line)
+                    if match is not None:
+                        context: list[FileSearchLine] = []
+                        if line_number > 1:
                             context.append(
                                 FileSearchLine(
-                                    line_number,
-                                    self._shorten_line(
-                                        line,
-                                        match.start(),
-                                        match.end(),
+                                    line_number - 1,
+                                    self._shorten_context_line(
+                                        lines[line_number - 2],
                                         max_line_length,
                                     ),
                                 )
                             )
-                            if following is not None:
-                                context.append(
-                                    FileSearchLine(
-                                        following[0],
-                                        self._shorten_context_line(
-                                            following[1],
-                                            max_line_length,
-                                        ),
-                                    )
+                        context.append(
+                            FileSearchLine(
+                                line_number,
+                                self._shorten_line(
+                                    line,
+                                    match.start(),
+                                    match.end(),
+                                    max_line_length,
+                                ),
+                            )
+                        )
+
+                        if line_number < len(lines):
+                            context.append(
+                                FileSearchLine(
+                                    line_number + 1,
+                                    self._shorten_context_line(
+                                        lines[line_number],
+                                        max_line_length,
+                                    ),
                                 )
-                            found.append(FileSearchMatch(file_path, line_number, tuple(context)))
-                        previous = current
-                        current = following
+                            )
+
+                        found.append(FileSearchMatch(file_path, line_number, tuple(context)))
 
             except OSError, UnicodeError:
                 return None
@@ -188,6 +183,7 @@ class FileSearcher:
                         or entry.is_junction()
                     ):
                         continue
+
                     if entry.is_dir():
                         _visit(entry)
                     elif entry.is_file() and self._matches_file_pattern(
