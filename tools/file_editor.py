@@ -18,7 +18,7 @@ class _FileEditResult:
     is_linked: bool
 
 
-class _FileEditor:
+class FileEditor:
     @staticmethod
     def _write_content(file: TextIO, content: str) -> None:
         file.seek(0)
