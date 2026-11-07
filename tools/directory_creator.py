@@ -5,20 +5,20 @@ from .utility import format_path, resolve_new_project_path
 
 
 @dataclass(frozen=True, slots=True)
-class DirectoryCreationResult:
+class _DirectoryCreationResult:
     path: Path
     is_linked: bool
 
 
 class DirectoryCreator:
     @staticmethod
-    def _create(path: Path) -> DirectoryCreationResult:
+    def _create(path: Path) -> _DirectoryCreationResult:
         resolved_path, is_linked = resolve_new_project_path(path)
         resolved_path.mkdir()
-        return DirectoryCreationResult(path, is_linked)
+        return _DirectoryCreationResult(path, is_linked)
 
     @staticmethod
-    def _format_result(result: DirectoryCreationResult) -> str:
+    def _format_result(result: _DirectoryCreationResult) -> str:
         return f"{format_path(result.path, result.is_linked)}\nStatus: created"
 
     def create_directory(self, path: str) -> str:

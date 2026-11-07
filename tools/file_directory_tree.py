@@ -6,7 +6,7 @@ from .validate import validate_directory_path, validate_max_depth
 
 
 @dataclass(frozen=True, slots=True)
-class FileDirectoryTreeResult:
+class _FileDirectoryTreeResult:
     path: Path
     is_linked: bool
     tree_lines: tuple[str, ...]
@@ -95,7 +95,7 @@ class FileDirectoryTree:
         max_depth: int | None,
         include_hidden: bool,
         excluded_names: list[str] | None,
-    ) -> FileDirectoryTreeResult:
+    ) -> _FileDirectoryTreeResult:
         validate_max_depth(max_depth)
         resolved_path, is_linked = resolve_linked_project_path(path)
         validate_directory_path(resolved_path)
@@ -108,7 +108,7 @@ class FileDirectoryTree:
         if len(tree_lines) == 1:
             tree_lines.append("└── (no visible entries)")
 
-        return FileDirectoryTreeResult(
+        return _FileDirectoryTreeResult(
             path,
             is_linked,
             tuple(tree_lines),
@@ -119,7 +119,7 @@ class FileDirectoryTree:
         )
 
     @staticmethod
-    def _format_result(result: FileDirectoryTreeResult) -> str:
+    def _format_result(result: _FileDirectoryTreeResult) -> str:
         formatted_tree = "\n".join(result.tree_lines)
         return (
             f"{format_path(result.path, result.is_linked)}\n"

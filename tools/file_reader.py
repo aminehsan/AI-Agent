@@ -6,7 +6,7 @@ from .validate import validate_file_path, validate_line_range
 
 
 @dataclass(frozen=True, slots=True)
-class FileReadResult:
+class _FileReadResult:
     path: Path
     content_lines: tuple[str, ...]
     first_line_number: int
@@ -20,7 +20,7 @@ class FileReader:
         start_line: int,
         end_line: int | None,
         encoding: str,
-    ) -> FileReadResult:
+    ) -> _FileReadResult:
         validate_line_range(start_line, end_line)
 
         resolved_path, is_linked = resolve_linked_project_path(path, allow_external_link=True)
@@ -31,10 +31,10 @@ class FileReader:
             lines = file.read().splitlines(keepends=True)
 
         selected_lines = lines[start_line - 1 : end_line]
-        return FileReadResult(path, tuple(selected_lines), start_line, is_linked)
+        return _FileReadResult(path, tuple(selected_lines), start_line, is_linked)
 
     @staticmethod
-    def _format_result(result: FileReadResult) -> str:
+    def _format_result(result: _FileReadResult) -> str:
         header = format_path(result.path, result.is_linked)
         if not result.content_lines:
             return f"{header}\nContent: No content found from line {result.first_line_number}"

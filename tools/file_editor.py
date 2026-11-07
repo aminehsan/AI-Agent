@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from os import fstat
 from pathlib import Path
+from typing import TextIO
 
 from .utility import format_path, has_file_changed, resolve_linked_project_path
 from .validate import (
@@ -12,14 +13,21 @@ from .validate import (
 
 
 @dataclass(frozen=True, slots=True)
-class FileEditResult:
+class _FileEditResult:
     path: Path
     is_linked: bool
 
 
-class FileEditor:
+class _FileEditor:
     @staticmethod
-    def _edit(path: Path, old_text: str, new_text: str, encoding: str) -> FileEditResult:
+    def _write_content(file: TextIO, content: str) -> None:
+        file.seek(0)
+        file.write(content)
+        file.flush()
+        file.truncate()
+        file.flush()
+
+    def _edit(self, path: Path, old_text: str, new_text: str, encoding: str) -> _FileEditResult:
         validate_edit_text(old_text, new_text)
 
         resolved_path, is_linked = resolve_linked_project_path(path)
@@ -39,28 +47,20 @@ class FileEditor:
                 raise ValueError("The file changed during editing. Read it again before retrying.")
 
             try:
-                file.seek(0)
-                file.write(updated_content)
-                file.flush()
-                file.truncate()
-                file.flush()
+                self._write_content(file, updated_content)
             except Exception:
                 try:
-                    file.seek(0)
-                    file.write(content)
-                    file.flush()
-                    file.truncate()
-                    file.flush()
+                    self._write_content(file, content)
                 except Exception as error:
                     raise RuntimeError(
                         "File editing failed and restoring the original content also failed."
                     ) from error
                 raise
 
-        return FileEditResult(path, is_linked)
+        return _FileEditResult(path, is_linked)
 
     @staticmethod
-    def _format_result(result: FileEditResult) -> str:
+    def _format_result(result: _FileEditResult) -> str:
         return f"{format_path(result.path, result.is_linked)}\nStatus: edited"
 
     def edit_file(

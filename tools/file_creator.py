@@ -5,7 +5,7 @@ from .utility import format_path, resolve_new_project_path
 
 
 @dataclass(frozen=True, slots=True)
-class FileCreationResult:
+class _FileCreationResult:
     path: Path
     character_count: int
     is_linked: bool
@@ -13,7 +13,7 @@ class FileCreationResult:
 
 class FileCreator:
     @staticmethod
-    def _create(path: Path, content: str, encoding: str) -> FileCreationResult:
+    def _create(path: Path, content: str, encoding: str) -> _FileCreationResult:
         resolved_path, is_linked = resolve_new_project_path(path)
 
         file_created = False
@@ -26,10 +26,10 @@ class FileCreator:
                 resolved_path.unlink(missing_ok=True)
             raise
 
-        return FileCreationResult(path, character_count, is_linked)
+        return _FileCreationResult(path, character_count, is_linked)
 
     @staticmethod
-    def _format_result(result: FileCreationResult) -> str:
+    def _format_result(result: _FileCreationResult) -> str:
         return (
             f"{format_path(result.path, result.is_linked)}\n"
             f"Status: created\nCharacters: {result.character_count}"

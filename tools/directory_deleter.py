@@ -10,7 +10,7 @@ from .validate import (
 
 
 @dataclass(frozen=True, slots=True)
-class DirectoryDeletionResult:
+class _DirectoryDeletionResult:
     path: Path
     is_link: bool
     is_linked: bool
@@ -18,7 +18,7 @@ class DirectoryDeletionResult:
 
 class DirectoryDeleter:
     @staticmethod
-    def _delete(path: Path) -> DirectoryDeletionResult:
+    def _delete(path: Path) -> _DirectoryDeletionResult:
         validate_logical_project_path(path)
         validate_non_project_root_path(path)
 
@@ -26,20 +26,20 @@ class DirectoryDeleter:
 
         if path.is_junction():
             path.rmdir()
-            return DirectoryDeletionResult(path, True, True)
+            return _DirectoryDeletionResult(path, True, True)
 
         if path.is_symlink() and path.is_dir():
             path.unlink()
-            return DirectoryDeletionResult(path, True, True)
+            return _DirectoryDeletionResult(path, True, True)
 
         resolved_path = resolve_project_path(path)
         validate_non_project_root_path(resolved_path)
         validate_directory_path(resolved_path)
         resolved_path.rmdir()
-        return DirectoryDeletionResult(path, False, is_linked)
+        return _DirectoryDeletionResult(path, False, is_linked)
 
     @staticmethod
-    def _format_result(result: DirectoryDeletionResult) -> str:
+    def _format_result(result: _DirectoryDeletionResult) -> str:
         status = "link deleted" if result.is_link else "deleted"
         return f"{format_path(result.path, result.is_linked)}\nStatus: {status}"
 
