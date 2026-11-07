@@ -109,8 +109,7 @@ class FileSearcher:
                 with file_path.open("r", encoding=encoding, newline="") as file:
                     content = file.read()
 
-                lines = (content + "\0").splitlines(keepends=True)
-                lines[-1] = lines[-1][:-1]
+                lines = content.splitlines(keepends=True)
 
                 line_starts = [0]
                 for line in lines[:-1]:
@@ -118,6 +117,10 @@ class FileSearcher:
 
                 for match in pattern.finditer(content):
                     start_offset, end_offset = match.span()
+                    if start_offset == end_offset == len(content) and (
+                        not content or content[-1] in "\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029"
+                    ):
+                        continue
                     start_line_number = bisect_right(line_starts, start_offset)
                     end_line_number = bisect_right(line_starts, max(start_offset, end_offset - 1))
                     context: list[FileSearchLine] = []
