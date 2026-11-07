@@ -27,7 +27,8 @@ class FileEditor:
         file.truncate()
         file.flush()
 
-    def _edit(self, path: Path, old_text: str, new_text: str, encoding: str) -> _FileEditResult:
+    @classmethod
+    def _edit(cls, path: Path, old_text: str, new_text: str, encoding: str) -> _FileEditResult:
         validate_edit_text(old_text, new_text)
 
         resolved_path, is_linked = resolve_linked_project_path(path)
@@ -47,10 +48,10 @@ class FileEditor:
                 raise ValueError("The file changed during editing. Read it again before retrying.")
 
             try:
-                self._write_content(file, updated_content)
+                cls._write_content(file, updated_content)
             except Exception:
                 try:
-                    self._write_content(file, content)
+                    cls._write_content(file, content)
                 except Exception as error:
                     raise RuntimeError(
                         "File editing failed and restoring the original content also failed."
@@ -63,8 +64,9 @@ class FileEditor:
     def _format_result(result: _FileEditResult) -> str:
         return f"{format_path(result.path, result.is_linked)}\nStatus: edited"
 
+    @classmethod
     def edit_file(
-        self,
+        cls,
         path: str,
         old_text: str,
         new_text: str,
@@ -83,4 +85,4 @@ class FileEditor:
             The requested path and edit status.
         """
 
-        return self._format_result(self._edit(Path(path), old_text, new_text, encoding))
+        return cls._format_result(cls._edit(Path(path), old_text, new_text, encoding))

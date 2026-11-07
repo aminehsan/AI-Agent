@@ -35,7 +35,8 @@ class FileCreator:
             f"Status: created\nCharacters: {result.character_count}"
         )
 
-    def create_file(self, path: str, content: str, encoding: str = "utf-8") -> str:
+    @classmethod
+    def create_file(cls, path: str, content: str, encoding: str = "utf-8") -> str:
         """
         Create a new text file at an absolute path.
 
@@ -48,4 +49,4 @@ class FileCreator:
             The requested path, creation status, and number of characters written.
         """
 
-        return self._format_result(self._create(Path(path), content, encoding))
+        return cls._format_result(cls._create(Path(path), content, encoding))

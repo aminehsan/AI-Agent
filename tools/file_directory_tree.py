@@ -17,8 +17,9 @@ class _FileDirectoryTreeResult:
 
 
 class FileDirectoryTree:
-    @staticmethod
+    @classmethod
     def _visit(
+        cls,
         directory: Path,
         prefix: str,
         depth: int,
@@ -71,16 +72,14 @@ class FileDirectoryTree:
                 file_count += 1
             tree_lines.append(f"{prefix}{connector}{label}")
             if is_directory and (max_depth is None or depth < max_depth):
-                child_links, child_directories, child_files, child_skipped = (
-                    FileDirectoryTree._visit(
-                        entry,
-                        child_prefix,
-                        depth + 1,
-                        max_depth,
-                        include_hidden,
-                        excluded_names,
-                        tree_lines,
-                    )
+                child_links, child_directories, child_files, child_skipped = cls._visit(
+                    entry,
+                    child_prefix,
+                    depth + 1,
+                    max_depth,
+                    include_hidden,
+                    excluded_names,
+                    tree_lines,
                 )
                 link_count += child_links
                 directory_count += child_directories
@@ -89,8 +88,9 @@ class FileDirectoryTree:
 
         return link_count, directory_count, file_count, skipped_path_count
 
+    @classmethod
     def _build(
-        self,
+        cls,
         path: Path,
         max_depth: int | None,
         include_hidden: bool,
@@ -102,7 +102,7 @@ class FileDirectoryTree:
 
         tree_lines = [f"{path.name}/" if path.name else str(path)]
         excluded_name_set = frozenset(excluded_names or ())
-        link_count, directory_count, file_count, skipped_path_count = self._visit(
+        link_count, directory_count, file_count, skipped_path_count = cls._visit(
             resolved_path, "", 1, max_depth, include_hidden, excluded_name_set, tree_lines
         )
         if len(tree_lines) == 1:
@@ -130,8 +130,9 @@ class FileDirectoryTree:
             f"Tree:\n{formatted_tree}"
         )
 
+    @classmethod
     def list_file_directory(
-        self,
+        cls,
         path: str,
         max_depth: int | None = None,
         include_hidden: bool = False,
@@ -152,8 +153,8 @@ class FileDirectoryTree:
             The requested path, formatted tree, displayed entry counts, and skipped path count.
         """
 
-        return self._format_result(
-            self._build(
+        return cls._format_result(
+            cls._build(
                 Path(path),
                 max_depth,
                 include_hidden,

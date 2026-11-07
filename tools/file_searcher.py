@@ -85,9 +85,9 @@ class FileSearcher:
             return line
         return f"{line[:max_line_length]}…"
 
-    @staticmethod
+    @classmethod
     def _search_file(
-        file_path: Path, options: _SearchOptions, remaining: int | None
+        cls, file_path: Path, options: _SearchOptions, remaining: int | None
     ) -> list[_FileSearchMatch] | None:
         found: list[_FileSearchMatch] = []
         display_path = options.path / file_path.relative_to(options.root)
@@ -117,16 +117,14 @@ class FileSearcher:
                     line = lines[line_number - 1]
                     if start_line_number <= line_number <= end_line_number:
                         line_offset = line_starts[line_number - 1]
-                        displayed_line = FileSearcher._shorten_line(
+                        displayed_line = cls._shorten_line(
                             line,
                             start_offset - line_offset,
                             end_offset - line_offset,
                             options.max_line_length,
                         )
                     else:
-                        displayed_line = FileSearcher._shorten_context_line(
-                            line, options.max_line_length
-                        )
+                        displayed_line = cls._shorten_context_line(line, options.max_line_length)
                     context.append(_FileSearchLine(line_number, displayed_line))
 
                 found.append(
@@ -142,8 +140,8 @@ class FileSearcher:
 
         return found
 
-    @staticmethod
-    def _visit(directory: Path, options: _SearchOptions, progress: _SearchProgress) -> None:
+    @classmethod
+    def _visit(cls, directory: Path, options: _SearchOptions, progress: _SearchProgress) -> None:
         try:
             entries = sorted(
                 directory.iterdir(), key=lambda entry: (entry.name.casefold(), entry.name)
@@ -163,8 +161,8 @@ class FileSearcher:
                 if entry.is_symlink() or entry.is_junction():
                     continue
                 if entry.is_dir():
-                    FileSearcher._visit(entry, options, progress)
-                elif entry.is_file() and FileSearcher._matches_file_pattern(
+                    cls._visit(entry, options, progress)
+                elif entry.is_file() and cls._matches_file_pattern(
                     entry, options.root, options.file_patterns
                 ):
                     progress.searched_file_count += 1
@@ -173,7 +171,7 @@ class FileSearcher:
                         if options.max_results is None
                         else options.max_results - len(progress.matches)
                     )
-                    found = FileSearcher._search_file(entry, options, remaining)
+                    found = cls._search_file(entry, options, remaining)
                     if found is None:
                         progress.skipped_path_count += 1
                     elif found:
@@ -183,8 +181,9 @@ class FileSearcher:
             except OSError:
                 progress.skipped_path_count += 1
 
-    @staticmethod
+    @classmethod
     def _search(
+        cls,
         path: Path,
         query: str,
         use_regex: bool,
@@ -214,7 +213,7 @@ class FileSearcher:
             encoding=encoding,
         )
         progress = _SearchProgress()
-        FileSearcher._visit(resolved_path, options, progress)
+        cls._visit(resolved_path, options, progress)
         return _FileSearchResult(
             path,
             is_linked,
@@ -240,8 +239,8 @@ class FileSearcher:
             location = f"{location}-{match.end_line_number}"
         return f"{match.path}:{location}\n{lines}"
 
-    @staticmethod
-    def _format_result(result: _FileSearchResult) -> str:
+    @classmethod
+    def _format_result(cls, result: _FileSearchResult) -> str:
         displayed_query = result.query.replace("\r", "\\r").replace("\n", "\\n")
         header = (
             f"{format_path(result.path, result.is_linked)}\n"
@@ -255,11 +254,12 @@ class FileSearcher:
         if not result.matches:
             return f"{header}\nResults: No matches found"
 
-        content = "\n\n".join(FileSearcher._format_match(match) for match in result.matches)
+        content = "\n\n".join(cls._format_match(match) for match in result.matches)
         return f"{header}\nResults:\n{content}"
 
+    @classmethod
     def search_files(
-        self,
+        cls,
         path: str,
         query: str,
         use_regex: bool = False,
@@ -294,8 +294,8 @@ class FileSearcher:
             Search statistics and matching occurrences with absolute paths and line ranges.
         """
 
-        return self._format_result(
-            self._search(
+        return cls._format_result(
+            cls._search(
                 Path(path),
                 query,
                 use_regex,

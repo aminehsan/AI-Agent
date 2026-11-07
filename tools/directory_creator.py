@@ -21,7 +21,8 @@ class DirectoryCreator:
     def _format_result(result: _DirectoryCreationResult) -> str:
         return f"{format_path(result.path, result.is_linked)}\nStatus: created"
 
-    def create_directory(self, path: str) -> str:
+    @classmethod
+    def create_directory(cls, path: str) -> str:
         """
         Create a new directory at an absolute path.
 
@@ -32,4 +33,4 @@ class DirectoryCreator:
             The requested path and creation status.
         """
 
-        return self._format_result(self._create(Path(path)))
+        return cls._format_result(cls._create(Path(path)))

@@ -36,7 +36,8 @@ class FileDeleter:
         status = "link deleted" if result.is_link else "deleted"
         return f"{format_path(result.path, result.is_linked)}\nStatus: {status}"
 
-    def delete_file(self, path: str) -> str:
+    @classmethod
+    def delete_file(cls, path: str) -> str:
         """
         Permanently delete a file or its symbolic link at an absolute path.
 
@@ -47,4 +48,4 @@ class FileDeleter:
             The requested path and deletion status.
         """
 
-        return self._format_result(self._delete(Path(path)))
+        return cls._format_result(cls._delete(Path(path)))

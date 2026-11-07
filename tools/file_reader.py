@@ -52,8 +52,9 @@ class FileReader:
             f"{header}\nLines: {result.first_line_number} - {last_line_number}\nContent:\n{content}"
         )
 
+    @classmethod
     def read_file(
-        self,
+        cls,
         path: str,
         start_line: int = 1,
         end_line: int | None = None,
@@ -72,4 +73,4 @@ class FileReader:
             The requested path, selected line range, and line-numbered text.
         """
 
-        return self._format_result(self._read(Path(path), start_line, end_line, encoding))
+        return cls._format_result(cls._read(Path(path), start_line, end_line, encoding))

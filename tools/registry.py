@@ -13,13 +13,13 @@ from .project_path import get_project_path
 
 def create_tools() -> list[FunctionTool]:
     return [
-        function_tool(DirectoryCreator().create_directory),
-        function_tool(DirectoryDeleter().delete_directory),
-        function_tool(FileCreator().create_file),
-        function_tool(FileDeleter().delete_file),
-        function_tool(FileDirectoryTree().list_file_directory),
-        function_tool(FileEditor().edit_file),
-        function_tool(FileReader().read_file),
-        function_tool(FileSearcher().search_files),
+        function_tool(DirectoryCreator.create_directory),
+        function_tool(DirectoryDeleter.delete_directory),
+        function_tool(FileCreator.create_file),
+        function_tool(FileDeleter.delete_file),
+        function_tool(FileDirectoryTree.list_file_directory),
+        function_tool(FileEditor.edit_file),
+        function_tool(FileReader.read_file),
+        function_tool(FileSearcher.search_files),
         function_tool(get_project_path),
     ]
