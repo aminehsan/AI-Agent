@@ -117,7 +117,7 @@ class FileSearcher:
 
                 for match in pattern.finditer(content):
                     start_offset, end_offset = match.span()
-                    if start_offset == end_offset == len(content) and (
+                    if start_offset == len(content) and (
                         not content or content[-1] in "\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029"
                     ):
                         continue
