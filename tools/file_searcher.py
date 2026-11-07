@@ -104,6 +104,7 @@ class FileSearcher:
 
         def _search_file(file_path: Path) -> list[FileSearchMatch] | None:
             found: list[FileSearchMatch] = []
+            display_path = path / file_path.relative_to(resolved_path)
             try:
                 with file_path.open("r", encoding=encoding, newline="") as file:
                     content = file.read()
@@ -140,7 +141,7 @@ class FileSearcher:
 
                     found.append(
                         FileSearchMatch(
-                            file_path, start_line_number, end_line_number, tuple(context)
+                            display_path, start_line_number, end_line_number, tuple(context)
                         )
                     )
                     if max_results is not None and len(matches) + len(found) >= max_results:
@@ -156,6 +157,8 @@ class FileSearcher:
                     directory.iterdir(), key=lambda entry: (entry.name.casefold(), entry.name)
                 )
             except OSError:
+                if directory == resolved_path:
+                    raise
                 skipped_path_count += 1
                 return
 
@@ -173,7 +176,9 @@ class FileSearcher:
                         continue
                     if entry.is_dir():
                         _visit(entry)
-                    elif entry.is_file() and self._matches_file_pattern(entry, path, patterns):
+                    elif entry.is_file() and self._matches_file_pattern(
+                        entry, resolved_path, patterns
+                    ):
                         searched_file_count += 1
                         found = _search_file(entry)
                         if found is None:
@@ -184,7 +189,7 @@ class FileSearcher:
                 except OSError:
                     skipped_path_count += 1
 
-        _visit(path)
+        _visit(resolved_path)
         return FileSearchResult(
             path,
             is_linked,
@@ -248,6 +253,7 @@ class FileSearcher:
         An explicitly supplied directory link may be searched.
         Literal and regex queries can match across lines; regex dots also match newlines.
         Configured project directories and their contents are always omitted.
+        Unreadable child paths are skipped and counted; an unreadable root raises an error.
 
         Args:
             path: Absolute path of a directory inside the project; an explicitly supplied link may point outside it.
