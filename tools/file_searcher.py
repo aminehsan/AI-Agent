@@ -1,36 +1,57 @@
 from bisect import bisect_right
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from re import DOTALL, IGNORECASE, MULTILINE, compile, escape
+from re import DOTALL, IGNORECASE, MULTILINE, Pattern, compile, escape
 
 from .utility import format_path, resolve_linked_project_path, should_skip_entry
 from .validate import validate_directory_path, validate_search_options
 
 
 @dataclass(frozen=True, slots=True)
-class FileSearchLine:
+class _FileSearchLine:
     line_number: int
     line: str
 
 
 @dataclass(frozen=True, slots=True)
-class FileSearchMatch:
+class _FileSearchMatch:
     path: Path
     start_line_number: int
     end_line_number: int
-    context: tuple[FileSearchLine, ...]
+    context: tuple[_FileSearchLine, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class FileSearchResult:
+class _FileSearchResult:
     path: Path
     is_linked: bool
     query: str
-    matches: tuple[FileSearchMatch, ...]
+    matches: tuple[_FileSearchMatch, ...]
     searched_file_count: int
     matched_file_count: int
     skipped_path_count: int
     limit_reached: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _SearchOptions:
+    path: Path
+    root: Path
+    pattern: Pattern[str]
+    file_patterns: tuple[str, ...]
+    include_hidden: bool
+    excluded_names: frozenset[str]
+    max_results: int | None
+    max_line_length: int | None
+    encoding: str
+
+
+@dataclass(slots=True)
+class _SearchProgress:
+    matches: list[_FileSearchMatch] = field(default_factory=list)
+    searched_file_count: int = 0
+    matched_file_count: int = 0
+    skipped_path_count: int = 0
 
 
 class FileSearcher:
@@ -64,8 +85,106 @@ class FileSearcher:
             return line
         return f"{line[:max_line_length]}…"
 
+    @staticmethod
+    def _search_file(
+        file_path: Path, options: _SearchOptions, remaining: int | None
+    ) -> list[_FileSearchMatch] | None:
+        found: list[_FileSearchMatch] = []
+        display_path = options.path / file_path.relative_to(options.root)
+        try:
+            with file_path.open("r", encoding=options.encoding, newline="") as file:
+                content = file.read()
+
+            lines = content.splitlines(keepends=True)
+            line_starts = [0]
+            for line in lines[:-1]:
+                line_starts.append(line_starts[-1] + len(line))
+
+            for match in options.pattern.finditer(content):
+                start_offset, end_offset = match.span()
+                if start_offset == len(content) and (
+                    not content or content[-1] in "\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029"
+                ):
+                    continue
+
+                start_line_number = bisect_right(line_starts, start_offset)
+                end_line_number = bisect_right(line_starts, max(start_offset, end_offset - 1))
+                context: list[_FileSearchLine] = []
+                for line_number in range(
+                    max(1, start_line_number - 1),
+                    min(len(lines), end_line_number + 1) + 1,
+                ):
+                    line = lines[line_number - 1]
+                    if start_line_number <= line_number <= end_line_number:
+                        line_offset = line_starts[line_number - 1]
+                        displayed_line = FileSearcher._shorten_line(
+                            line,
+                            start_offset - line_offset,
+                            end_offset - line_offset,
+                            options.max_line_length,
+                        )
+                    else:
+                        displayed_line = FileSearcher._shorten_context_line(
+                            line, options.max_line_length
+                        )
+                    context.append(_FileSearchLine(line_number, displayed_line))
+
+                found.append(
+                    _FileSearchMatch(
+                        display_path, start_line_number, end_line_number, tuple(context)
+                    )
+                )
+                if remaining is not None and len(found) >= remaining:
+                    break
+
+        except OSError, UnicodeError:
+            return None
+
+        return found
+
+    @staticmethod
+    def _visit(directory: Path, options: _SearchOptions, progress: _SearchProgress) -> None:
+        try:
+            entries = sorted(
+                directory.iterdir(), key=lambda entry: (entry.name.casefold(), entry.name)
+            )
+        except OSError:
+            if directory == options.root:
+                raise
+            progress.skipped_path_count += 1
+            return
+
+        for entry in entries:
+            if options.max_results is not None and len(progress.matches) >= options.max_results:
+                return
+            try:
+                if should_skip_entry(entry, options.excluded_names, options.include_hidden):
+                    continue
+                if entry.is_symlink() or entry.is_junction():
+                    continue
+                if entry.is_dir():
+                    FileSearcher._visit(entry, options, progress)
+                elif entry.is_file() and FileSearcher._matches_file_pattern(
+                    entry, options.root, options.file_patterns
+                ):
+                    progress.searched_file_count += 1
+                    remaining = (
+                        None
+                        if options.max_results is None
+                        else options.max_results - len(progress.matches)
+                    )
+                    found = FileSearcher._search_file(entry, options, remaining)
+                    if found is None:
+                        progress.skipped_path_count += 1
+                    elif found:
+                        progress.matches.extend(found)
+                        progress.matched_file_count += 1
+
+            except OSError:
+                progress.skipped_path_count += 1
+
+    @staticmethod
     def _search(
-        self,
         path: Path,
         query: str,
         use_regex: bool,
@@ -76,123 +195,53 @@ class FileSearcher:
         max_results: int | None,
         max_line_length: int | None,
         encoding: str,
-    ) -> FileSearchResult:
+    ) -> _FileSearchResult:
         validate_search_options(query, max_results, max_line_length)
 
-        patterns = tuple(file_patterns or ())
         resolved_path, is_linked = resolve_linked_project_path(path, allow_external_link=True)
-
         validate_directory_path(resolved_path)
 
         flags = DOTALL | MULTILINE | (0 if case_sensitive else IGNORECASE)
-        pattern = compile(query if use_regex else escape(query), flags)
-        excluded_name_set = frozenset(excluded_names or ())
-        matches: list[FileSearchMatch] = []
-        searched_file_count = 0
-        matched_file_count = 0
-        skipped_path_count = 0
-
-        def _search_file(file_path: Path) -> list[FileSearchMatch] | None:
-            found: list[FileSearchMatch] = []
-            display_path = path / file_path.relative_to(resolved_path)
-            try:
-                with file_path.open("r", encoding=encoding, newline="") as file:
-                    content = file.read()
-
-                lines = content.splitlines(keepends=True)
-                line_starts = [0]
-                for line in lines[:-1]:
-                    line_starts.append(line_starts[-1] + len(line))
-
-                for match in pattern.finditer(content):
-                    start_offset, end_offset = match.span()
-                    if start_offset == len(content) and (
-                        not content or content[-1] in "\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029"
-                    ):
-                        continue
-
-                    start_line_number = bisect_right(line_starts, start_offset)
-                    end_line_number = bisect_right(line_starts, max(start_offset, end_offset - 1))
-                    context: list[FileSearchLine] = []
-                    for line_number in range(
-                        max(1, start_line_number - 1),
-                        min(len(lines), end_line_number + 1) + 1,
-                    ):
-                        line = lines[line_number - 1]
-                        if start_line_number <= line_number <= end_line_number:
-                            line_offset = line_starts[line_number - 1]
-                            displayed_line = self._shorten_line(
-                                line,
-                                start_offset - line_offset,
-                                end_offset - line_offset,
-                                max_line_length,
-                            )
-                        else:
-                            displayed_line = self._shorten_context_line(line, max_line_length)
-                        context.append(FileSearchLine(line_number, displayed_line))
-
-                    found.append(
-                        FileSearchMatch(
-                            display_path, start_line_number, end_line_number, tuple(context)
-                        )
-                    )
-                    if max_results is not None and len(matches) + len(found) >= max_results:
-                        break
-
-            except OSError, UnicodeError:
-                return None
-
-            return found
-
-        def _visit(directory: Path) -> None:
-            nonlocal searched_file_count, matched_file_count, skipped_path_count
-            try:
-                entries = sorted(
-                    directory.iterdir(), key=lambda entry: (entry.name.casefold(), entry.name)
-                )
-            except OSError:
-                if directory == resolved_path:
-                    raise
-                skipped_path_count += 1
-                return
-
-            for entry in entries:
-                if max_results is not None and len(matches) >= max_results:
-                    return
-                try:
-                    if should_skip_entry(entry, excluded_name_set, include_hidden):
-                        continue
-                    if entry.is_symlink() or entry.is_junction():
-                        continue
-                    if entry.is_dir():
-                        _visit(entry)
-                    elif entry.is_file() and self._matches_file_pattern(
-                        entry, resolved_path, patterns
-                    ):
-                        searched_file_count += 1
-                        found = _search_file(entry)
-                        if found is None:
-                            skipped_path_count += 1
-                        elif found:
-                            matches.extend(found)
-                            matched_file_count += 1
-                except OSError:
-                    skipped_path_count += 1
-
-        _visit(resolved_path)
-        return FileSearchResult(
+        options = _SearchOptions(
+            path=path,
+            root=resolved_path,
+            pattern=compile(query if use_regex else escape(query), flags),
+            file_patterns=tuple(file_patterns or ()),
+            include_hidden=include_hidden,
+            excluded_names=frozenset(excluded_names or ()),
+            max_results=max_results,
+            max_line_length=max_line_length,
+            encoding=encoding,
+        )
+        progress = _SearchProgress()
+        FileSearcher._visit(resolved_path, options, progress)
+        return _FileSearchResult(
             path,
             is_linked,
             query,
-            tuple(matches),
-            searched_file_count,
-            matched_file_count,
-            skipped_path_count,
-            max_results is not None and len(matches) >= max_results,
+            tuple(progress.matches),
+            progress.searched_file_count,
+            progress.matched_file_count,
+            progress.skipped_path_count,
+            max_results is not None and len(progress.matches) >= max_results,
         )
 
     @staticmethod
-    def _format_result(result: FileSearchResult) -> str:
+    def _format_match(match: _FileSearchMatch) -> str:
+        last_line = match.context[-1].line_number
+        line_number_width = len(str(last_line))
+        lines = "\n".join(
+            f"{'>' if match.start_line_number <= line.line_number <= match.end_line_number else ' '} "
+            f"{line.line_number:>{line_number_width}}|{line.line}"
+            for line in match.context
+        )
+        location = str(match.start_line_number)
+        if match.end_line_number != match.start_line_number:
+            location = f"{location}-{match.end_line_number}"
+        return f"{match.path}:{location}\n{lines}"
+
+    @staticmethod
+    def _format_result(result: _FileSearchResult) -> str:
         displayed_query = result.query.replace("\r", "\\r").replace("\n", "\\n")
         header = (
             f"{format_path(result.path, result.is_linked)}\n"
@@ -206,20 +255,7 @@ class FileSearcher:
         if not result.matches:
             return f"{header}\nResults: No matches found"
 
-        def _format_match(match: FileSearchMatch) -> str:
-            last_line = match.context[-1].line_number
-            line_number_width = len(str(last_line))
-            lines = "\n".join(
-                f"{'>' if match.start_line_number <= line.line_number <= match.end_line_number else ' '} "
-                f"{line.line_number:>{line_number_width}}|{line.line}"
-                for line in match.context
-            )
-            location = str(match.start_line_number)
-            if match.end_line_number != match.start_line_number:
-                location = f"{location}-{match.end_line_number}"
-            return f"{match.path}:{location}\n{lines}"
-
-        content = "\n\n".join(_format_match(match) for match in result.matches)
+        content = "\n\n".join(FileSearcher._format_match(match) for match in result.matches)
         return f"{header}\nResults:\n{content}"
 
     def search_files(
