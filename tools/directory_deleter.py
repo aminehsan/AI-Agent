@@ -1,49 +1,57 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from .utility import is_linked_project_path, resolve_project_path
 from .validate import (
-    validate_absolute_path,
     validate_directory_path,
-    validate_non_excluded_project_path,
-    validate_non_link_path,
+    validate_logical_project_path,
     validate_non_project_root_path,
-    validate_project_path,
 )
 
 
 @dataclass(frozen=True, slots=True)
 class DirectoryDeletionResult:
     path: Path
+    is_link: bool
+    is_linked: bool
 
 
 class DirectoryDeleter:
     @staticmethod
     def _delete(path: Path) -> DirectoryDeletionResult:
-        validate_absolute_path(path)
-        validate_non_link_path(path)
+        validate_logical_project_path(path)
+        validate_non_project_root_path(path)
+        is_linked = is_linked_project_path(path.parent)
+        resolve_project_path(path.parent)
+        if path.is_junction():
+            path.rmdir()
+            return DirectoryDeletionResult(path, True, True)
+        if path.is_symlink() and path.is_dir():
+            path.unlink()
+            return DirectoryDeletionResult(path, True, True)
 
-        resolved_path = path.resolve(strict=True)
-        validate_project_path(resolved_path)
+        resolved_path = resolve_project_path(path)
         validate_non_project_root_path(resolved_path)
-        validate_non_excluded_project_path(resolved_path)
         validate_directory_path(resolved_path)
 
         resolved_path.rmdir()
-        return DirectoryDeletionResult(resolved_path)
+        return DirectoryDeletionResult(path, False, is_linked)
 
     @staticmethod
     def _format_result(result: DirectoryDeletionResult) -> str:
-        return f"Path: {result.path}\nStatus: deleted"
+        status = "link deleted" if result.is_link else "deleted"
+        link_status = "\nLink: yes" if result.is_linked else ""
+        return f"Path: {result.path}{link_status}\nStatus: {status}"
 
     def delete_directory(self, path: str) -> str:
         """
-        Permanently delete an empty directory at an absolute path.
+        Permanently delete an empty directory or its link at an absolute path.
 
         Args:
-            path: Absolute path of an empty directory inside the project and outside excluded directories; links are rejected.
+            path: Absolute path of an empty directory inside the project and outside excluded directories; deleting a directory link removes only the link.
 
         Returns:
-            The resolved path and deletion status.
+            The requested path and deletion status.
         """
 
         return self._format_result(self._delete(Path(path)))

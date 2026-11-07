@@ -3,18 +3,14 @@ from pathlib import Path
 
 from settings import settings
 
-from .utility import is_hidden_path
-from .validate import (
-    validate_absolute_path,
-    validate_directory_path,
-    validate_non_excluded_project_path,
-    validate_project_path,
-)
+from .utility import is_hidden_path, is_linked_project_path, resolve_project_path
+from .validate import validate_directory_path
 
 
 @dataclass(frozen=True, slots=True)
 class FileDirectoryTreeResult:
     path: Path
+    is_linked: bool
     tree_lines: tuple[str, ...]
     link_count: int
     directory_count: int
@@ -29,16 +25,14 @@ class FileDirectoryTree:
         include_hidden: bool,
         excluded_names: list[str] | None,
     ) -> FileDirectoryTreeResult:
-        validate_absolute_path(path)
         if max_depth is not None and max_depth < 1:
             raise ValueError("max_depth must be greater than or equal to 1.")
-        resolved_path = path.resolve(strict=True)
-        validate_project_path(resolved_path)
-        validate_non_excluded_project_path(resolved_path)
+        is_linked = is_linked_project_path(path)
+        resolved_path = resolve_project_path(path)
         validate_directory_path(resolved_path)
 
         excluded_name_set = frozenset(excluded_names or ())
-        tree_lines = [f"{resolved_path.name}/" if resolved_path.name else str(resolved_path)]
+        tree_lines = [f"{path.name}/" if path.name else str(path)]
         link_count = 0
         directory_count = 0
         file_count = 0
@@ -86,7 +80,8 @@ class FileDirectoryTree:
             tree_lines.append("└── (no visible entries)")
 
         return FileDirectoryTreeResult(
-            resolved_path,
+            path,
+            is_linked,
             tuple(tree_lines),
             link_count,
             directory_count,
@@ -96,8 +91,10 @@ class FileDirectoryTree:
     @staticmethod
     def _format_result(result: FileDirectoryTreeResult) -> str:
         formatted_tree = "\n".join(result.tree_lines)
+        link_status = "Link: yes\n" if result.is_linked else ""
         return (
             f"Path: {result.path}\n"
+            f"{link_status}"
             f"Links: {result.link_count}\n"
             f"Directories: {result.directory_count}\n"
             f"Files: {result.file_count}\n"
@@ -122,7 +119,7 @@ class FileDirectoryTree:
             excluded_names: Exact file or directory names to omit at every depth; defaults to None.
 
         Returns:
-            The resolved path, formatted tree, and displayed entry counts.
+            The requested path, formatted tree, and displayed entry counts.
         """
 
         return self._format_result(

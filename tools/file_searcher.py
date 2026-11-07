@@ -5,13 +5,8 @@ from re import DOTALL, IGNORECASE, MULTILINE, compile, escape
 
 from settings import settings
 
-from .utility import is_hidden_path
-from .validate import (
-    validate_absolute_path,
-    validate_directory_path,
-    validate_non_excluded_project_path,
-    validate_project_path,
-)
+from .utility import is_hidden_path, is_linked_project_path, resolve_project_path
+from .validate import validate_directory_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +26,7 @@ class FileSearchMatch:
 @dataclass(frozen=True, slots=True)
 class FileSearchResult:
     path: Path
+    is_linked: bool
     query: str
     matches: tuple[FileSearchMatch, ...]
     searched_file_count: int
@@ -83,7 +79,6 @@ class FileSearcher:
         max_line_length: int | None,
         encoding: str,
     ) -> FileSearchResult:
-        validate_absolute_path(path)
         if not query:
             raise ValueError("query must not be empty.")
         if max_results is not None and max_results < 1:
@@ -93,9 +88,8 @@ class FileSearcher:
 
         patterns = tuple(file_patterns or ())
 
-        resolved_path = path.resolve(strict=True)
-        validate_project_path(resolved_path)
-        validate_non_excluded_project_path(resolved_path)
+        is_linked = is_linked_project_path(path)
+        resolved_path = resolve_project_path(path, allow_external_link=is_linked)
         validate_directory_path(resolved_path)
 
         flags = DOTALL | MULTILINE | (0 if case_sensitive else IGNORECASE)
@@ -179,9 +173,7 @@ class FileSearcher:
                         continue
                     if entry.is_dir():
                         _visit(entry)
-                    elif entry.is_file() and self._matches_file_pattern(
-                        entry, resolved_path, patterns
-                    ):
+                    elif entry.is_file() and self._matches_file_pattern(entry, path, patterns):
                         searched_file_count += 1
                         found = _search_file(entry)
                         if found is None:
@@ -192,9 +184,10 @@ class FileSearcher:
                 except OSError:
                     skipped_path_count += 1
 
-        _visit(resolved_path)
+        _visit(path)
         return FileSearchResult(
-            resolved_path,
+            path,
+            is_linked,
             query,
             tuple(matches),
             searched_file_count,
@@ -206,8 +199,10 @@ class FileSearcher:
     @staticmethod
     def _format_result(result: FileSearchResult) -> str:
         displayed_query = result.query.replace("\r", "\\r").replace("\n", "\\n")
+        link_status = "Link: yes\n" if result.is_linked else ""
         header = (
             f"Path: {result.path}\n"
+            f"{link_status}"
             f"Query: {displayed_query}\n"
             f"Matches: {len(result.matches)}\n"
             f"Matched files: {result.matched_file_count}\n"
@@ -249,12 +244,13 @@ class FileSearcher:
         encoding: str = "utf-8",
     ) -> str:
         """
-        Search text recursively inside files without following links.
+        Search text recursively without following links found during traversal.
+        An explicitly supplied directory link may be searched.
         Literal and regex queries can match across lines; regex dots also match newlines.
         Configured project directories and their contents are always omitted.
 
         Args:
-            path: Absolute path of a directory inside the project.
+            path: Absolute path of a directory inside the project; an explicitly supplied link may point outside it.
             query: Literal text or regular expression to search for; must not be empty.
             use_regex: Whether query is a Python regular expression; defaults to False.
             case_sensitive: Whether letter case must match; defaults to False.

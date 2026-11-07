@@ -34,17 +34,18 @@ def validate_file_path(path: Path) -> None:
         raise ValueError(f"Path must be file: {path}")
 
 
-def validate_non_link_path(path: Path) -> None:
-    if path.is_symlink() or path.is_junction():
-        raise ValueError(f"Path must not be a link: {path}")
-
-
-def validate_non_hard_link_path(path: Path) -> None:
-    if path.lstat().st_nlink > 1:
-        raise ValueError(f"Path must not be a hard link: {path}")
-
-
 def validate_non_excluded_project_path(path: Path) -> None:
     directories = tuple(directory.resolve() for directory in settings.excluded_project_directories)
-    if any(path.is_relative_to(directory) for directory in directories):
+    if any(
+        path.is_relative_to(directory)
+        for directory in (*settings.excluded_project_directories, *directories)
+    ):
         raise ValueError(f"Path must not be inside an excluded project directory: {path}")
+
+
+def validate_logical_project_path(path: Path) -> None:
+    validate_absolute_path(path)
+    if ".." in path.parts:
+        raise ValueError(f"Path must not contain '..': {path}")
+    validate_project_path(path)
+    validate_non_excluded_project_path(path)

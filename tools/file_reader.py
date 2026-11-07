@@ -1,12 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from .validate import (
-    validate_absolute_path,
-    validate_file_path,
-    validate_non_excluded_project_path,
-    validate_project_path,
-)
+from .utility import is_linked_project_path, resolve_project_path
+from .validate import validate_file_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,6 +10,7 @@ class FileReadResult:
     path: Path
     content_lines: tuple[str, ...]
     first_line_number: int
+    is_linked: bool
 
 
 class FileReader:
@@ -24,27 +21,25 @@ class FileReader:
         end_line: int | None,
         encoding: str,
     ) -> FileReadResult:
-        validate_absolute_path(path)
         if start_line < 1:
             raise ValueError("start_line must be greater than or equal to 1.")
         if end_line is not None and end_line < start_line:
             raise ValueError("end_line must be greater than or equal to start_line.")
-        resolved_path = path.resolve(strict=True)
-        validate_project_path(resolved_path)
-        validate_non_excluded_project_path(resolved_path)
+        is_linked = is_linked_project_path(path)
+        resolved_path = resolve_project_path(path, allow_external_link=is_linked)
         validate_file_path(resolved_path)
 
         with resolved_path.open("r", encoding=encoding, errors="strict", newline="") as file:
             lines = file.read().splitlines(keepends=True)
         selected_lines = lines[start_line - 1 : end_line]
 
-        return FileReadResult(resolved_path, tuple(selected_lines), start_line)
+        return FileReadResult(path, tuple(selected_lines), start_line, is_linked)
 
     @staticmethod
     def _format_result(result: FileReadResult) -> str:
-        path = str(result.path)
+        header = f"Path: {result.path}" + ("\nLink: yes" if result.is_linked else "")
         if not result.content_lines:
-            return f"Path: {path}\nContent: No content found from line {result.first_line_number}"
+            return f"{header}\nContent: No content found from line {result.first_line_number}"
 
         last_line_number = result.first_line_number + len(result.content_lines) - 1
         line_number_width = len(str(last_line_number))
@@ -57,9 +52,7 @@ class FileReader:
         )
 
         return (
-            f"Path: {path}\n"
-            f"Lines: {result.first_line_number} - {last_line_number}\n"
-            f"Content:\n{content}"
+            f"{header}\nLines: {result.first_line_number} - {last_line_number}\nContent:\n{content}"
         )
 
     def read_file(
@@ -73,13 +66,13 @@ class FileReader:
         Read text from an absolute file path.
 
         Args:
-            path: Absolute path of a text file inside the project and outside excluded directories.
+            path: Absolute path of a text file inside the project and outside excluded directories; links to external files may be read.
             start_line: First line to return, using one-based numbering; defaults to 1.
             end_line: Last line to return, inclusive; null reads to end of file; defaults to None.
             encoding: Text encoding used to read the file; defaults to utf-8.
 
         Returns:
-            The resolved path, selected line range, and line-numbered text.
+            The requested path, selected line range, and line-numbered text.
         """
 
         return self._format_result(self._read(Path(path), start_line, end_line, encoding))
