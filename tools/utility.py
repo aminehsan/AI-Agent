@@ -6,6 +6,7 @@ from pathlib import Path
 from settings import settings
 
 from .validate import (
+    validate_directory_parent_path,
     validate_logical_project_path,
     validate_non_excluded_project_path,
     validate_project_path,
@@ -26,6 +27,18 @@ def is_hidden_path(path: Path) -> bool:
     return False
 
 
+def should_skip_entry(entry: Path, excluded_names: frozenset[str], include_hidden: bool) -> bool:
+    return (
+        entry in settings.excluded_project_directories
+        or entry.name in excluded_names
+        or (not include_hidden and is_hidden_path(entry))
+    )
+
+
+def format_path(path: Path, is_linked: bool = False) -> str:
+    return f"Path: {path}" + ("\nLink: yes" if is_linked else "")
+
+
 def is_linked_project_path(path: Path) -> bool:
     validate_logical_project_path(path)
     current_path = settings.project_root
@@ -44,6 +57,25 @@ def resolve_project_path(path: Path, *, allow_external_link: bool = False) -> Pa
     elif not allow_external_link:
         validate_project_path(resolved_path)
     return resolved_path
+
+
+def resolve_linked_project_path(
+    path: Path, *, allow_external_link: bool = False
+) -> tuple[Path, bool]:
+    is_linked = is_linked_project_path(path)
+    resolved_path = resolve_project_path(
+        path, allow_external_link=allow_external_link and is_linked
+    )
+    return resolved_path, is_linked
+
+
+def resolve_new_project_path(path: Path) -> tuple[Path, bool]:
+    validate_logical_project_path(path)
+    resolved_parent, is_linked = resolve_linked_project_path(path.parent)
+    validate_directory_parent_path(resolved_parent)
+    resolved_path = resolved_parent / path.name
+    validate_non_excluded_project_path(resolved_path)
+    return resolved_path, is_linked
 
 
 def has_file_changed(path: Path, original_stat: stat_result) -> bool:

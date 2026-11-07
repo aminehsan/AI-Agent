@@ -1,12 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from .utility import is_linked_project_path, resolve_project_path
-from .validate import (
-    validate_directory_parent_path,
-    validate_logical_project_path,
-    validate_non_excluded_project_path,
-)
+from .utility import format_path, resolve_new_project_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,20 +13,13 @@ class DirectoryCreationResult:
 class DirectoryCreator:
     @staticmethod
     def _create(path: Path) -> DirectoryCreationResult:
-        validate_logical_project_path(path)
-        is_linked = is_linked_project_path(path.parent)
-        resolved_parent = resolve_project_path(path.parent)
-        validate_directory_parent_path(resolved_parent)
-
-        resolved_path = resolved_parent / path.name
-        validate_non_excluded_project_path(resolved_path)
+        resolved_path, is_linked = resolve_new_project_path(path)
         resolved_path.mkdir()
         return DirectoryCreationResult(path, is_linked)
 
     @staticmethod
     def _format_result(result: DirectoryCreationResult) -> str:
-        link_status = "\nLink: yes" if result.is_linked else ""
-        return f"Path: {result.path}{link_status}\nStatus: created"
+        return f"{format_path(result.path, result.is_linked)}\nStatus: created"
 
     def create_directory(self, path: str) -> str:
         """

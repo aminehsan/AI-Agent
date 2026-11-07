@@ -1,10 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from settings import settings
-
-from .utility import is_hidden_path, is_linked_project_path, resolve_project_path
-from .validate import validate_directory_path
+from .utility import format_path, resolve_linked_project_path, should_skip_entry
+from .validate import validate_directory_path, validate_max_depth
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,10 +24,8 @@ class FileDirectoryTree:
         include_hidden: bool,
         excluded_names: list[str] | None,
     ) -> FileDirectoryTreeResult:
-        if max_depth is not None and max_depth < 1:
-            raise ValueError("max_depth must be greater than or equal to 1.")
-        is_linked = is_linked_project_path(path)
-        resolved_path = resolve_project_path(path)
+        validate_max_depth(max_depth)
+        resolved_path, is_linked = resolve_linked_project_path(path)
         validate_directory_path(resolved_path)
 
         excluded_name_set = frozenset(excluded_names or ())
@@ -45,11 +41,7 @@ class FileDirectoryTree:
             try:
                 for entry in directory.iterdir():
                     try:
-                        if (
-                            entry in settings.excluded_project_directories
-                            or entry.name in excluded_name_set
-                            or (not include_hidden and is_hidden_path(entry))
-                        ):
+                        if should_skip_entry(entry, excluded_name_set, include_hidden):
                             continue
                         is_link = entry.is_symlink() or entry.is_junction()
                         entries.append((entry, is_link, not is_link and entry.is_dir()))
@@ -105,10 +97,8 @@ class FileDirectoryTree:
     @staticmethod
     def _format_result(result: FileDirectoryTreeResult) -> str:
         formatted_tree = "\n".join(result.tree_lines)
-        link_status = "Link: yes\n" if result.is_linked else ""
         return (
-            f"Path: {result.path}\n"
-            f"{link_status}"
+            f"{format_path(result.path, result.is_linked)}\n"
             f"Links: {result.link_count}\n"
             f"Directories: {result.directory_count}\n"
             f"Files: {result.file_count}\n"

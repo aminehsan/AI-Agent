@@ -1,12 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from .utility import is_linked_project_path, resolve_project_path
-from .validate import (
-    validate_directory_parent_path,
-    validate_logical_project_path,
-    validate_non_excluded_project_path,
-)
+from .utility import format_path, resolve_new_project_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,13 +14,7 @@ class FileCreationResult:
 class FileCreator:
     @staticmethod
     def _create(path: Path, content: str, encoding: str) -> FileCreationResult:
-        validate_logical_project_path(path)
-        is_linked = is_linked_project_path(path.parent)
-        resolved_parent = resolve_project_path(path.parent)
-        validate_directory_parent_path(resolved_parent)
-
-        resolved_path = resolved_parent / path.name
-        validate_non_excluded_project_path(resolved_path)
+        resolved_path, is_linked = resolve_new_project_path(path)
         file_created = False
         try:
             with resolved_path.open("x", encoding=encoding, newline="") as file:
@@ -40,8 +29,10 @@ class FileCreator:
 
     @staticmethod
     def _format_result(result: FileCreationResult) -> str:
-        link_status = "\nLink: yes" if result.is_linked else ""
-        return f"Path: {result.path}{link_status}\nStatus: created\nCharacters: {result.character_count}"
+        return (
+            f"{format_path(result.path, result.is_linked)}\n"
+            f"Status: created\nCharacters: {result.character_count}"
+        )
 
     def create_file(self, path: str, content: str, encoding: str = "utf-8") -> str:
         """

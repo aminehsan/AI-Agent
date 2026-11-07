@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from .utility import is_linked_project_path, resolve_project_path
+from .utility import format_path, resolve_linked_project_path, resolve_project_path
 from .validate import (
     validate_directory_path,
     validate_logical_project_path,
@@ -21,8 +21,7 @@ class DirectoryDeleter:
     def _delete(path: Path) -> DirectoryDeletionResult:
         validate_logical_project_path(path)
         validate_non_project_root_path(path)
-        is_linked = is_linked_project_path(path.parent)
-        resolve_project_path(path.parent)
+        _, is_linked = resolve_linked_project_path(path.parent)
         if path.is_junction():
             path.rmdir()
             return DirectoryDeletionResult(path, True, True)
@@ -40,8 +39,7 @@ class DirectoryDeleter:
     @staticmethod
     def _format_result(result: DirectoryDeletionResult) -> str:
         status = "link deleted" if result.is_link else "deleted"
-        link_status = "\nLink: yes" if result.is_linked else ""
-        return f"Path: {result.path}{link_status}\nStatus: {status}"
+        return f"{format_path(result.path, result.is_linked)}\nStatus: {status}"
 
     def delete_directory(self, path: str) -> str:
         """

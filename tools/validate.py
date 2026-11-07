@@ -49,3 +49,48 @@ def validate_logical_project_path(path: Path) -> None:
         raise ValueError(f"Path must not contain '..': {path}")
     validate_project_path(path)
     validate_non_excluded_project_path(path)
+
+
+def validate_max_depth(max_depth: int | None) -> None:
+    if max_depth is not None and max_depth < 1:
+        raise ValueError("max_depth must be greater than or equal to 1.")
+
+
+def validate_line_range(start_line: int, end_line: int | None) -> None:
+    if start_line < 1:
+        raise ValueError("start_line must be greater than or equal to 1.")
+    if end_line is not None and end_line < start_line:
+        raise ValueError("end_line must be greater than or equal to start_line.")
+
+
+def validate_search_options(
+    query: str, max_results: int | None, max_line_length: int | None
+) -> None:
+    if not query:
+        raise ValueError("query must not be empty.")
+    if max_results is not None and max_results < 1:
+        raise ValueError("max_results must be positive.")
+    if max_line_length is not None and max_line_length < 1:
+        raise ValueError("max_line_length must be positive.")
+
+
+def validate_edit_text(old_text: str, new_text: str) -> None:
+    if not old_text:
+        raise ValueError("old_text must not be empty.")
+    if old_text == new_text:
+        raise ValueError("new_text must differ from old_text.")
+
+
+def validate_single_occurrence(content: str, old_text: str) -> None:
+    match_count = 0
+    match_index = content.find(old_text)
+    while match_index != -1:
+        match_count += 1
+        match_index = content.find(old_text, match_index + 1)
+    if match_count != 1:
+        raise ValueError(f"old_text must occur exactly once; found {match_count} occurrences.")
+
+
+def validate_not_hard_linked(link_count: int) -> None:
+    if link_count != 1:
+        raise ValueError("Editing a hard-linked file is not allowed.")

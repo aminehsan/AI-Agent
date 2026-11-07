@@ -2,8 +2,13 @@ from dataclasses import dataclass
 from os import fstat
 from pathlib import Path
 
-from .utility import has_file_changed, is_linked_project_path, resolve_project_path
-from .validate import validate_file_path
+from .utility import format_path, has_file_changed, resolve_linked_project_path
+from .validate import (
+    validate_edit_text,
+    validate_file_path,
+    validate_not_hard_linked,
+    validate_single_occurrence,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,29 +20,15 @@ class FileEditResult:
 class FileEditor:
     @staticmethod
     def _edit(path: Path, old_text: str, new_text: str, encoding: str) -> FileEditResult:
-        if not old_text:
-            raise ValueError("old_text must not be empty.")
-        if old_text == new_text:
-            raise ValueError("new_text must differ from old_text.")
-
-        is_linked = is_linked_project_path(path)
-        resolved_path = resolve_project_path(path)
+        validate_edit_text(old_text, new_text)
+        resolved_path, is_linked = resolve_linked_project_path(path)
         validate_file_path(resolved_path)
 
         with resolved_path.open("r+", encoding=encoding, newline="") as file:
             original_stat = fstat(file.fileno())
-            if original_stat.st_nlink != 1:
-                raise ValueError("Editing a hard-linked file is not allowed.")
+            validate_not_hard_linked(original_stat.st_nlink)
             content = file.read()
-            match_count = 0
-            match_index = content.find(old_text)
-            while match_index != -1:
-                match_count += 1
-                match_index = content.find(old_text, match_index + 1)
-            if match_count != 1:
-                raise ValueError(
-                    f"old_text must occur exactly once; found {match_count} occurrences."
-                )
+            validate_single_occurrence(content, old_text)
 
             updated_content = content.replace(old_text, new_text, 1)
 
@@ -69,8 +60,7 @@ class FileEditor:
 
     @staticmethod
     def _format_result(result: FileEditResult) -> str:
-        link_status = "\nLink: yes" if result.is_linked else ""
-        return f"Path: {result.path}{link_status}\nStatus: edited"
+        return f"{format_path(result.path, result.is_linked)}\nStatus: edited"
 
     def edit_file(
         self,

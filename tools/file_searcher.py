@@ -3,10 +3,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from re import DOTALL, IGNORECASE, MULTILINE, compile, escape
 
-from settings import settings
-
-from .utility import is_hidden_path, is_linked_project_path, resolve_project_path
-from .validate import validate_directory_path
+from .utility import format_path, resolve_linked_project_path, should_skip_entry
+from .validate import validate_directory_path, validate_search_options
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,24 +77,16 @@ class FileSearcher:
         max_line_length: int | None,
         encoding: str,
     ) -> FileSearchResult:
-        if not query:
-            raise ValueError("query must not be empty.")
-        if max_results is not None and max_results < 1:
-            raise ValueError("max_results must be positive.")
-        if max_line_length is not None and max_line_length < 1:
-            raise ValueError("max_line_length must be positive.")
+        validate_search_options(query, max_results, max_line_length)
 
         patterns = tuple(file_patterns or ())
 
-        is_linked = is_linked_project_path(path)
-        resolved_path = resolve_project_path(path, allow_external_link=is_linked)
+        resolved_path, is_linked = resolve_linked_project_path(path, allow_external_link=True)
         validate_directory_path(resolved_path)
 
         flags = DOTALL | MULTILINE | (0 if case_sensitive else IGNORECASE)
         pattern = compile(query if use_regex else escape(query), flags)
         excluded_name_set = frozenset(excluded_names or ())
-        excluded_directories = settings.excluded_project_directories
-
         matches: list[FileSearchMatch] = []
         searched_file_count = 0
         matched_file_count = 0
@@ -169,13 +159,9 @@ class FileSearcher:
                 if max_results is not None and len(matches) >= max_results:
                     return
                 try:
-                    if (
-                        entry in excluded_directories
-                        or entry.name in excluded_name_set
-                        or (not include_hidden and is_hidden_path(entry))
-                        or entry.is_symlink()
-                        or entry.is_junction()
-                    ):
+                    if should_skip_entry(entry, excluded_name_set, include_hidden):
+                        continue
+                    if entry.is_symlink() or entry.is_junction():
                         continue
                     if entry.is_dir():
                         _visit(entry)
@@ -207,10 +193,8 @@ class FileSearcher:
     @staticmethod
     def _format_result(result: FileSearchResult) -> str:
         displayed_query = result.query.replace("\r", "\\r").replace("\n", "\\n")
-        link_status = "Link: yes\n" if result.is_linked else ""
         header = (
-            f"Path: {result.path}\n"
-            f"{link_status}"
+            f"{format_path(result.path, result.is_linked)}\n"
             f"Query: {displayed_query}\n"
             f"Matches: {len(result.matches)}\n"
             f"Matched files: {result.matched_file_count}\n"

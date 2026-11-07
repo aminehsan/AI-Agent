@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from .utility import is_linked_project_path, resolve_project_path
-from .validate import validate_file_path
+from .utility import format_path, resolve_linked_project_path
+from .validate import validate_file_path, validate_line_range
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,12 +21,8 @@ class FileReader:
         end_line: int | None,
         encoding: str,
     ) -> FileReadResult:
-        if start_line < 1:
-            raise ValueError("start_line must be greater than or equal to 1.")
-        if end_line is not None and end_line < start_line:
-            raise ValueError("end_line must be greater than or equal to start_line.")
-        is_linked = is_linked_project_path(path)
-        resolved_path = resolve_project_path(path, allow_external_link=is_linked)
+        validate_line_range(start_line, end_line)
+        resolved_path, is_linked = resolve_linked_project_path(path, allow_external_link=True)
         validate_file_path(resolved_path)
 
         with resolved_path.open("r", encoding=encoding, errors="strict", newline="") as file:
@@ -37,7 +33,7 @@ class FileReader:
 
     @staticmethod
     def _format_result(result: FileReadResult) -> str:
-        header = f"Path: {result.path}" + ("\nLink: yes" if result.is_linked else "")
+        header = format_path(result.path, result.is_linked)
         if not result.content_lines:
             return f"{header}\nContent: No content found from line {result.first_line_number}"
 
