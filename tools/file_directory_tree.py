@@ -18,71 +18,93 @@ class FileDirectoryTreeResult:
 
 class FileDirectoryTree:
     @staticmethod
+    def _visit(
+        directory: Path,
+        prefix: str,
+        depth: int,
+        max_depth: int | None,
+        include_hidden: bool,
+        excluded_names: frozenset[str],
+        tree_lines: list[str],
+    ) -> tuple[int, int, int, int]:
+        link_count = 0
+        directory_count = 0
+        file_count = 0
+        skipped_path_count = 0
+        entries = []
+        try:
+            for entry in directory.iterdir():
+                try:
+                    if should_skip_entry(entry, excluded_names, include_hidden):
+                        continue
+                    is_link = entry.is_symlink() or entry.is_junction()
+                    entries.append((entry, is_link, not is_link and entry.is_dir()))
+                except OSError:
+                    skipped_path_count += 1
+        except OSError:
+            if depth == 1:
+                raise
+            tree_lines.append(f"{prefix}└── (unreadable)")
+            return 0, 0, 0, skipped_path_count + 1
+        entries.sort(
+            key=lambda item: (
+                not item[2],
+                item[0].name.casefold(),
+                item[0].name,
+            )
+        )
+
+        for index, (entry, is_link, is_directory) in enumerate(entries):
+            is_last = index == len(entries) - 1
+            connector = "└── " if is_last else "├── "
+            child_prefix = prefix + ("    " if is_last else "│   ")
+            if is_link:
+                label = f"{entry.name}@"
+                link_count += 1
+            elif is_directory:
+                label = f"{entry.name}/"
+                directory_count += 1
+                if max_depth is not None and depth >= max_depth:
+                    label += " [depth limit]"
+            else:
+                label = entry.name
+                file_count += 1
+            tree_lines.append(f"{prefix}{connector}{label}")
+            if is_directory and (max_depth is None or depth < max_depth):
+                child_links, child_directories, child_files, child_skipped = (
+                    FileDirectoryTree._visit(
+                        entry,
+                        child_prefix,
+                        depth + 1,
+                        max_depth,
+                        include_hidden,
+                        excluded_names,
+                        tree_lines,
+                    )
+                )
+                link_count += child_links
+                directory_count += child_directories
+                file_count += child_files
+                skipped_path_count += child_skipped
+
+        return link_count, directory_count, file_count, skipped_path_count
+
     def _build(
+        self,
         path: Path,
         max_depth: int | None,
         include_hidden: bool,
         excluded_names: list[str] | None,
     ) -> FileDirectoryTreeResult:
         validate_max_depth(max_depth)
-
         resolved_path, is_linked = resolve_linked_project_path(path)
-
         validate_directory_path(resolved_path)
 
-        excluded_name_set = frozenset(excluded_names or ())
         tree_lines = [f"{path.name}/" if path.name else str(path)]
-        link_count = 0
-        directory_count = 0
-        file_count = 0
-        skipped_path_count = 0
-
-        def _visit(directory: Path, prefix: str, depth: int) -> None:
-            nonlocal link_count, directory_count, file_count, skipped_path_count
-            entries = []
-            try:
-                for entry in directory.iterdir():
-                    try:
-                        if should_skip_entry(entry, excluded_name_set, include_hidden):
-                            continue
-                        is_link = entry.is_symlink() or entry.is_junction()
-                        entries.append((entry, is_link, not is_link and entry.is_dir()))
-                    except OSError:
-                        skipped_path_count += 1
-            except OSError:
-                if depth == 1:
-                    raise
-                skipped_path_count += 1
-                tree_lines.append(f"{prefix}└── (unreadable)")
-                return
-            entries.sort(
-                key=lambda item: (
-                    not item[2],
-                    item[0].name.casefold(),
-                    item[0].name,
-                )
-            )
-
-            for index, (entry, is_link, is_directory) in enumerate(entries):
-                is_last = index == len(entries) - 1
-                connector = "└── " if is_last else "├── "
-                child_prefix = prefix + ("    " if is_last else "│   ")
-                if is_link:
-                    label = f"{entry.name}@"
-                    link_count += 1
-                elif is_directory:
-                    label = f"{entry.name}/"
-                    directory_count += 1
-                    if max_depth is not None and depth >= max_depth:
-                        label += " [depth limit]"
-                else:
-                    label = entry.name
-                    file_count += 1
-                tree_lines.append(f"{prefix}{connector}{label}")
-                if is_directory and (max_depth is None or depth < max_depth):
-                    _visit(entry, child_prefix, depth + 1)
-
-        _visit(resolved_path, "", 1)
+        excluded_name_set = frozenset(excluded_names or ())
+        link_count, directory_count, file_count, skipped_path_count = self._visit(
+            resolved_path, "", 1, max_depth, include_hidden, excluded_name_set, tree_lines
+        )
         if len(tree_lines) == 1:
             tree_lines.append("└── (no visible entries)")
 
