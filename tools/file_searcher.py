@@ -80,8 +80,8 @@ class FileSearcher:
         validate_search_options(query, max_results, max_line_length)
 
         patterns = tuple(file_patterns or ())
-
         resolved_path, is_linked = resolve_linked_project_path(path, allow_external_link=True)
+
         validate_directory_path(resolved_path)
 
         flags = DOTALL | MULTILINE | (0 if case_sensitive else IGNORECASE)
@@ -100,7 +100,6 @@ class FileSearcher:
                     content = file.read()
 
                 lines = content.splitlines(keepends=True)
-
                 line_starts = [0]
                 for line in lines[:-1]:
                     line_starts.append(line_starts[-1] + len(line))
@@ -111,10 +110,10 @@ class FileSearcher:
                         not content or content[-1] in "\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029"
                     ):
                         continue
+
                     start_line_number = bisect_right(line_starts, start_offset)
                     end_line_number = bisect_right(line_starts, max(start_offset, end_offset - 1))
                     context: list[FileSearchLine] = []
-
                     for line_number in range(
                         max(1, start_line_number - 1),
                         min(len(lines), end_line_number + 1) + 1,
@@ -139,8 +138,10 @@ class FileSearcher:
                     )
                     if max_results is not None and len(matches) + len(found) >= max_results:
                         break
+
             except OSError, UnicodeError:
                 return None
+
             return found
 
         def _visit(directory: Path) -> None:
@@ -219,7 +220,6 @@ class FileSearcher:
             return f"{match.path}:{location}\n{lines}"
 
         content = "\n\n".join(_format_match(match) for match in result.matches)
-
         return f"{header}\nResults:\n{content}"
 
     def search_files(

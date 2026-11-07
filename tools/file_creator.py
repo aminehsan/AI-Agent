@@ -15,6 +15,7 @@ class FileCreator:
     @staticmethod
     def _create(path: Path, content: str, encoding: str) -> FileCreationResult:
         resolved_path, is_linked = resolve_new_project_path(path)
+
         file_created = False
         try:
             with resolved_path.open("x", encoding=encoding, newline="") as file:

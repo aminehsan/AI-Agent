@@ -25,7 +25,9 @@ class FileDirectoryTree:
         excluded_names: list[str] | None,
     ) -> FileDirectoryTreeResult:
         validate_max_depth(max_depth)
+
         resolved_path, is_linked = resolve_linked_project_path(path)
+
         validate_directory_path(resolved_path)
 
         excluded_name_set = frozenset(excluded_names or ())

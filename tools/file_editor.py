@@ -21,7 +21,9 @@ class FileEditor:
     @staticmethod
     def _edit(path: Path, old_text: str, new_text: str, encoding: str) -> FileEditResult:
         validate_edit_text(old_text, new_text)
+
         resolved_path, is_linked = resolve_linked_project_path(path)
+
         validate_file_path(resolved_path)
 
         with resolved_path.open("r+", encoding=encoding, newline="") as file:
@@ -29,7 +31,6 @@ class FileEditor:
             validate_not_hard_linked(original_stat.st_nlink)
             content = file.read()
             validate_single_occurrence(content, old_text)
-
             updated_content = content.replace(old_text, new_text, 1)
 
             if has_file_changed(resolved_path, original_stat) or (

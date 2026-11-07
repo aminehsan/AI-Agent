@@ -21,10 +21,13 @@ class DirectoryDeleter:
     def _delete(path: Path) -> DirectoryDeletionResult:
         validate_logical_project_path(path)
         validate_non_project_root_path(path)
+
         _, is_linked = resolve_linked_project_path(path.parent)
+
         if path.is_junction():
             path.rmdir()
             return DirectoryDeletionResult(path, True, True)
+
         if path.is_symlink() and path.is_dir():
             path.unlink()
             return DirectoryDeletionResult(path, True, True)
@@ -32,7 +35,6 @@ class DirectoryDeleter:
         resolved_path = resolve_project_path(path)
         validate_non_project_root_path(resolved_path)
         validate_directory_path(resolved_path)
-
         resolved_path.rmdir()
         return DirectoryDeletionResult(path, False, is_linked)
 

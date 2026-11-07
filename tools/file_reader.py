@@ -22,13 +22,15 @@ class FileReader:
         encoding: str,
     ) -> FileReadResult:
         validate_line_range(start_line, end_line)
+
         resolved_path, is_linked = resolve_linked_project_path(path, allow_external_link=True)
+
         validate_file_path(resolved_path)
 
         with resolved_path.open("r", encoding=encoding, errors="strict", newline="") as file:
             lines = file.read().splitlines(keepends=True)
-        selected_lines = lines[start_line - 1 : end_line]
 
+        selected_lines = lines[start_line - 1 : end_line]
         return FileReadResult(path, tuple(selected_lines), start_line, is_linked)
 
     @staticmethod
@@ -46,7 +48,6 @@ class FileReader:
                 start=result.first_line_number,
             )
         )
-
         return (
             f"{header}\nLines: {result.first_line_number} - {last_line_number}\nContent:\n{content}"
         )

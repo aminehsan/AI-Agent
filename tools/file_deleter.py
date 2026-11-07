@@ -19,14 +19,15 @@ class FileDeleter:
     @staticmethod
     def _delete(path: Path) -> FileDeletionResult:
         validate_logical_project_path(path)
+
         _, is_linked = resolve_linked_project_path(path.parent)
+
         if path.is_symlink() and not path.is_dir():
             path.unlink()
             return FileDeletionResult(path, True, True)
 
         resolved_path = resolve_project_path(path)
         validate_file_path(resolved_path)
-
         resolved_path.unlink()
         return FileDeletionResult(path, False, is_linked)
 
