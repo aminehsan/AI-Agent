@@ -25,10 +25,8 @@ class DirectoryCreator:
     def create_directory(cls, path: str) -> str:
         """
         Create a new directory at an absolute path.
-
         Args:
             path: Absolute path of a new directory inside the project and outside excluded directories.
-
         Returns:
             The requested path and creation status.
         """

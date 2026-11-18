@@ -74,13 +74,11 @@ class FileEditor:
     ) -> str:
         """
         Replace a single exact occurrence of text in an existing file.
-
         Args:
             path: Absolute path of a text file inside the project and outside excluded directories; linked targets must remain inside the project, and hard-linked files cannot be edited.
             old_text: Non-empty text that must occur at exactly one position, counting overlapping matches; case, whitespace, and line endings must match.
             new_text: Different text to insert exactly as provided; an empty string removes the matched text.
             encoding: Text encoding used to read and write the file; defaults to utf-8.
-
         Returns:
             The requested path and edit status.
         """

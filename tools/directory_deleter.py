@@ -47,10 +47,8 @@ class DirectoryDeleter:
     def delete_directory(cls, path: str) -> str:
         """
         Permanently delete an empty directory or its link at an absolute path.
-
         Args:
             path: Absolute path of an empty directory inside the project and outside excluded directories; deleting a directory link removes only the link.
-
         Returns:
             The requested path and deletion status.
         """

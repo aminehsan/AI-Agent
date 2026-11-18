@@ -62,13 +62,11 @@ class FileReader:
     ) -> str:
         """
         Read text from an absolute file path.
-
         Args:
             path: Absolute path of a text file inside the project and outside excluded directories; links to external files may be read.
             start_line: First line to return, using one-based numbering; defaults to 1.
             end_line: Last line to return, inclusive; null reads to end of file; defaults to None.
             encoding: Text encoding used to read the file; defaults to utf-8.
-
         Returns:
             The requested path, selected line range, and line-numbered text.
         """

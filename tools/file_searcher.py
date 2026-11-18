@@ -277,7 +277,6 @@ class FileSearcher:
         Literal and regex queries can match across lines; regex dots also match newlines.
         Configured project directories and their contents are always omitted.
         Unreadable child paths are skipped and counted; an unreadable root raises an error.
-
         Args:
             path: Absolute path of a directory inside the project; an explicitly supplied link may point outside it.
             query: Literal text or regular expression to search for; must not be empty.
@@ -289,7 +288,6 @@ class FileSearcher:
             max_results: Maximum matching occurrences to return; None means unlimited; defaults to None.
             max_line_length: Maximum original characters per displayed line; None means unlimited; defaults to None.
             encoding: Text encoding used to read files; defaults to utf-8.
-
         Returns:
             Search statistics and matching occurrences with absolute paths and line ranges.
         """

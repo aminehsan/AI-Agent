@@ -142,13 +142,11 @@ class FileDirectoryTree:
         List files and directories as a deterministic tree without following links.
         Configured project directories and their contents are always omitted.
         Unreadable child paths are skipped and counted; an unreadable root raises an error.
-
         Args:
             path: Absolute path of a directory inside the project.
             max_depth: Maximum depth below the root; null applies no limit; defaults to None.
             include_hidden: Whether to include hidden files and directories; defaults to False.
             excluded_names: Exact file or directory names to omit at every depth; defaults to None.
-
         Returns:
             The requested path, formatted tree, displayed entry counts, and skipped path count.
         """

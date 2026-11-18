@@ -39,12 +39,10 @@ class FileCreator:
     def create_file(cls, path: str, content: str, encoding: str = "utf-8") -> str:
         """
         Create a new text file at an absolute path.
-
         Args:
             path: Absolute path of a new text file inside the project and outside excluded directories.
             content: Text to write exactly as provided.
             encoding: Text encoding used to write the file; defaults to utf-8.
-
         Returns:
             The requested path, creation status, and number of characters written.
         """

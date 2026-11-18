@@ -40,10 +40,8 @@ class FileDeleter:
     def delete_file(cls, path: str) -> str:
         """
         Permanently delete a file or its symbolic link at an absolute path.
-
         Args:
             path: Absolute path of a file inside the project and outside excluded directories; deleting a file link removes only the link.
-
         Returns:
             The requested path and deletion status.
         """
