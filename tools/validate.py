@@ -90,13 +90,14 @@ def validate_line_range(start_line: int, end_line: int | None) -> None:
         raise ValueError("end_line must be greater than or equal to start_line.")
 
 
-def validate_search_options(
-    query: str, max_results: int | None, max_line_length: int | None
-) -> None:
+def validate_search_options(query: str, max_results: int | None) -> None:
     if not query:
         raise ValueError("query must not be empty.")
     if max_results is not None and max_results < 1:
         raise ValueError("max_results must be positive.")
+
+
+def validate_max_line_length(max_line_length: int | None) -> None:
     if max_line_length is not None and max_line_length < 1:
         raise ValueError("max_line_length must be positive.")
 

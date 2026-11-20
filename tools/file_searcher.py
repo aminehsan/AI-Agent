@@ -4,7 +4,7 @@ from pathlib import Path
 from re import DOTALL, IGNORECASE, MULTILINE, Pattern, compile, escape
 
 from .utility import format_path, resolve_linked_project_path, should_skip_entry
-from .validate import validate_directory_path, validate_search_options
+from .validate import validate_directory_path, validate_max_line_length, validate_search_options
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,7 +195,8 @@ class FileSearcher:
         max_line_length: int | None,
         encoding: str,
     ) -> _FileSearchResult:
-        validate_search_options(query, max_results, max_line_length)
+        validate_search_options(query, max_results)
+        validate_max_line_length(max_line_length)
 
         resolved_path, is_linked = resolve_linked_project_path(path, allow_external_link=True)
         validate_directory_path(resolved_path)
