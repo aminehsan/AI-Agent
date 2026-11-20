@@ -44,10 +44,8 @@ def validate_unused_destination_path(path: Path) -> None:
         raise FileExistsError(f"Destination path already exists: {path}")
 
 
-def validate_destination_outside_source_directory(
-    source_path: Path, destination_path: Path
-) -> None:
-    if any(parent.resolve().is_relative_to(source_path) for parent in destination_path.parents):
+def validate_destination_outside_source_directory(path: Path, destination_path: Path) -> None:
+    if any(parent.resolve().is_relative_to(path) for parent in destination_path.parents):
         raise ValueError(
             f"Destination path must not be inside the source directory: {destination_path}"
         )
