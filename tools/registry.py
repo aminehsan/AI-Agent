@@ -2,6 +2,7 @@ from agents import FunctionTool, function_tool
 
 from .directory_creator import DirectoryCreator
 from .directory_deleter import DirectoryDeleter
+from .directory_mover import DirectoryMover
 from .file_creator import FileCreator
 from .file_deleter import FileDeleter
 from .file_directory_tree import FileDirectoryTree
@@ -16,6 +17,7 @@ def create_tools() -> list[FunctionTool]:
     return [
         function_tool(DirectoryCreator.create_directory),
         function_tool(DirectoryDeleter.delete_directory),
+        function_tool(DirectoryMover.move_directory),
         function_tool(FileCreator.create_file),
         function_tool(FileDeleter.delete_file),
         function_tool(FileDirectoryTree.list_file_directory),

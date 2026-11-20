@@ -43,6 +43,14 @@ def validate_non_excluded_project_path(path: Path) -> None:
         raise ValueError(f"Path must not be inside an excluded project directory: {path}")
 
 
+def validate_no_excluded_project_descendants(path: Path) -> None:
+    if any(
+        directory.is_relative_to(path) or directory.resolve().is_relative_to(path)
+        for directory in settings.excluded_project_directories
+    ):
+        raise ValueError(f"Path must not contain an excluded project directory: {path}")
+
+
 def validate_logical_project_path(path: Path) -> None:
     validate_absolute_path(path)
     if ".." in path.parts:
