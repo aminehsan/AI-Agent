@@ -3,9 +3,12 @@ from pathlib import Path
 
 from .utility import format_path, resolve_linked_project_path, resolve_new_project_path
 from .validate import (
+    validate_destination_outside_source_directory,
     validate_directory_path,
     validate_no_excluded_project_descendants,
+    validate_non_linked_source_path,
     validate_non_project_root_path,
+    validate_unused_destination_path,
 )
 
 
@@ -21,21 +24,14 @@ class DirectoryMover:
     @staticmethod
     def _move(source_path: Path, destination_path: Path) -> _DirectoryMoveResult:
         resolved_source, source_is_linked = resolve_linked_project_path(source_path)
-        if source_path.is_symlink() or source_path.is_junction():
-            raise ValueError(f"Source path must not be a symbolic link or junction: {source_path}")
+        validate_non_linked_source_path(source_path)
         validate_non_project_root_path(resolved_source)
         validate_directory_path(resolved_source)
         validate_no_excluded_project_descendants(resolved_source)
 
         resolved_destination, destination_is_linked = resolve_new_project_path(destination_path)
-        if resolved_destination.exists(follow_symlinks=False):
-            raise FileExistsError(f"Destination path already exists: {destination_path}")
-        if any(
-            parent.resolve().is_relative_to(resolved_source) for parent in destination_path.parents
-        ):
-            raise ValueError(
-                f"Destination path must not be inside the source directory: {destination_path}"
-            )
+        validate_unused_destination_path(resolved_destination)
+        validate_destination_outside_source_directory(resolved_source, destination_path)
 
         resolved_source.rename(resolved_destination)
 

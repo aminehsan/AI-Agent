@@ -65,13 +65,7 @@ class FileEditor:
         return f"{format_path(result.path, result.is_linked)}\nStatus: edited"
 
     @classmethod
-    def edit_file(
-        cls,
-        path: str,
-        old_text: str,
-        new_text: str,
-        encoding: str = "utf-8",
-    ) -> str:
+    def edit_file(cls, path: str, old_text: str, new_text: str, encoding: str = "utf-8") -> str:
         """
         Replace a single exact occurrence of text in an existing file.
         Args:

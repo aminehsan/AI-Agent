@@ -34,6 +34,25 @@ def validate_file_path(path: Path) -> None:
         raise ValueError(f"Path must be file: {path}")
 
 
+def validate_non_linked_source_path(path: Path) -> None:
+    if path.is_symlink() or path.is_junction():
+        raise ValueError(f"Source path must not be a symbolic link or junction: {path}")
+
+
+def validate_unused_destination_path(path: Path) -> None:
+    if path.exists(follow_symlinks=False):
+        raise FileExistsError(f"Destination path already exists: {path}")
+
+
+def validate_destination_outside_source_directory(
+    source_path: Path, destination_path: Path
+) -> None:
+    if any(parent.resolve().is_relative_to(source_path) for parent in destination_path.parents):
+        raise ValueError(
+            f"Destination path must not be inside the source directory: {destination_path}"
+        )
+
+
 def validate_non_excluded_project_path(path: Path) -> None:
     directories = tuple(directory.resolve() for directory in settings.excluded_project_directories)
     if any(

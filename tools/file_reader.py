@@ -15,16 +15,10 @@ class _FileReadResult:
 
 class FileReader:
     @staticmethod
-    def _read(
-        path: Path,
-        start_line: int,
-        end_line: int | None,
-        encoding: str,
-    ) -> _FileReadResult:
+    def _read(path: Path, start_line: int, end_line: int | None, encoding: str) -> _FileReadResult:
         validate_line_range(start_line, end_line)
 
         resolved_path, is_linked = resolve_linked_project_path(path, allow_external_link=True)
-
         validate_file_path(resolved_path)
 
         with resolved_path.open("r", encoding=encoding, errors="strict", newline="") as file:
@@ -54,11 +48,7 @@ class FileReader:
 
     @classmethod
     def read_file(
-        cls,
-        path: str,
-        start_line: int = 1,
-        end_line: int | None = None,
-        encoding: str = "utf-8",
+        cls, path: str, start_line: int = 1, end_line: int | None = None, encoding: str = "utf-8"
     ) -> str:
         """
         Read text from an absolute file path.

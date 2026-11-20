@@ -2,7 +2,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .utility import format_path, resolve_linked_project_path, resolve_new_project_path
-from .validate import validate_file_path
+from .validate import (
+    validate_file_path,
+    validate_non_linked_source_path,
+    validate_unused_destination_path,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,13 +21,11 @@ class FileMover:
     @staticmethod
     def _move(source_path: Path, destination_path: Path) -> _FileMoveResult:
         resolved_source, source_is_linked = resolve_linked_project_path(source_path)
-        if source_path.is_symlink():
-            raise ValueError(f"Source path must not be a symbolic link: {source_path}")
+        validate_non_linked_source_path(source_path)
         validate_file_path(resolved_source)
 
         resolved_destination, destination_is_linked = resolve_new_project_path(destination_path)
-        if resolved_destination.exists(follow_symlinks=False):
-            raise FileExistsError(f"Destination path already exists: {destination_path}")
+        validate_unused_destination_path(resolved_destination)
 
         resolved_source.rename(resolved_destination)
 
