@@ -5,9 +5,9 @@ from .utility import format_path
 
 class ProjectPath:
     @staticmethod
-    def get_project_path() -> str:
+    def show_project_path() -> str:
         """
-        Get the absolute root path of the current project.
+        Show the absolute root path of the current project.
         Returns:
             The formatted absolute project path.
         """

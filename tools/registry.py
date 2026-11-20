@@ -27,5 +27,5 @@ def create_tools() -> list[FunctionTool]:
         function_tool(FileReader.read_file),
         function_tool(FileSearcher.search_files),
         function_tool(PathFinder.find_paths),
-        function_tool(ProjectPath.get_project_path),
+        function_tool(ProjectPath.show_project_path),
     ]
