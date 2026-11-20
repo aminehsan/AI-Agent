@@ -11,7 +11,7 @@ from .file_mover import FileMover
 from .file_reader import FileReader
 from .file_searcher import FileSearcher
 from .path_finder import PathFinder
-from .project_path import get_project_path
+from .project_path import ProjectPath
 
 
 def create_tools() -> list[FunctionTool]:
@@ -27,5 +27,5 @@ def create_tools() -> list[FunctionTool]:
         function_tool(FileReader.read_file),
         function_tool(FileSearcher.search_files),
         function_tool(PathFinder.find_paths),
-        function_tool(get_project_path),
+        function_tool(ProjectPath.get_project_path),
     ]
